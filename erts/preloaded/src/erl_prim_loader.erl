@@ -831,28 +831,15 @@ prim_set_primary_archive(PS, ArchiveFile, ArchiveBin, #file_info{} = FileInfo)
     {Res3, PS3} =
         case PS#prim_state.primary_archive of
             undefined ->
-                Fun =
-                    fun({Funny, _GI, _GB}, A) ->
-                            case Funny of
-                                ["", "nibe", RevApp] -> % Reverse ebin
-                                    %% Collect ebin directories in archive
-                                    Ebin = reverse(RevApp) ++ "/ebin",
-				    {true, [Ebin | A]};
-                                _ ->
-                                    {true, A}
-                            end
-                    end,
-                Ebins0 = [ArchiveFile],
-                case open_archive({ArchiveFile, ArchiveBin}, FileInfo, Ebins0, Fun) of
-                    {ok, PrimZip, {RevEbins, FI, _}} ->
-                        Ebins = reverse(RevEbins),
-                        debug(PS, {set_primary_archive, Ebins}),
+		case cache_escript_archive(ArchiveFile, ArchiveBin, FileInfo) of
+		    {ok, PrimZip, FI, Ebins} ->
+			debug(PS, {set_primary_archive, Ebins}),
                         put(ArchiveFile, {primary, PrimZip, FI}),
-                        {{ok, Ebins}, PS#prim_state{primary_archive = ArchiveFile}};
+			{{ok, Ebins}, PS#prim_state{primary_archive = ArchiveFile}};
                     Error ->
                         debug(PS, {set_primary_archive, Error}),
                         {Error, PS}
-                end;
+		end;
             OldArchiveFile ->
                 debug(PS, {set_primary_archive, clean}),
                 {primary, PrimZip, _FI} = erase(OldArchiveFile),
@@ -1022,6 +1009,21 @@ apply_archive(PS, Fun, Acc, Archive) ->
 			    debug(PS, {primary, Error}),
 			    {Error, PS}
 		    end;
+		{ok, _FI2} ->
+		    %% If mtime differs reload from escript archive,
+		    %% clear cache, update cache, and retry.
+		    case cache_escript_archive(Archive) of
+			{ok, PrimZip2, FI3, _Ebins} ->
+			    debug(PS, {cache, {update, Archive}}),
+			    %% Clear cache and close old primzip first
+			    ok = clear_cache(Archive, {ok, PrimZip}),
+			    %% Update cache
+			    put(Archive, {primary, PrimZip2, FI3});
+			Error2 ->
+			    debug(PS, {cache, {clear, Error2}}),
+			    clear_cache(Archive, {ok, PrimZip})
+		    end,
+		    apply_archive(PS, Fun, Acc, Archive);
 		Error ->
 		    debug(PS, {cache, {clear, Error}}),
 		    clear_cache(Archive, {ok, PrimZip}),
@@ -1450,4 +1452,160 @@ normalize(Name, Acc) ->
 	    normalize(Chars, [Char | Acc]);
 	[] ->
 	    reverse(Acc)
+    end.
+
+cache_escript_archive(ArchiveFile) ->
+    %% TODO: use read_file_info/1 instead? primary archive seems efile only
+    {ok, FileInfo} = prim_file:read_file_info(ArchiveFile),
+    {ok, ArchiveBin} = escript_parse_file(ArchiveFile),
+    cache_escript_archive(ArchiveFile, ArchiveBin, FileInfo).
+
+cache_escript_archive(ArchiveFile, ArchiveBin, FileInfo) ->
+    Fun = fun({Funny, _GI, _GB}, A) ->
+		  case Funny of
+		      ["", "nibe", RevApp] -> % Reverse ebin
+			  %% Collect ebin directories in archive
+			  Ebin = reverse(RevApp) ++ "/ebin",
+			  {true, [Ebin | A]};
+		      _ ->
+			  {true, A}
+		  end
+	  end,
+    Ebins0 = [ArchiveFile],
+    case open_archive({ArchiveFile, ArchiveBin}, FileInfo, Ebins0, Fun) of
+	{ok, PrimZip, {RevEbins, FI, _}} ->
+	    Ebins = reverse(RevEbins),
+	    {ok, PrimZip, FI, Ebins};
+	Error ->
+	    Error
+    end.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Escript parsing
+%% TODO: avoid code duplication (erl_prim_loader.erl, escript.erl)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+-type escript_shebang()  :: string().
+-type escript_comment()  :: string().
+-type escript_emu_args() :: string().
+
+-record(escript_sections, {type,
+			   shebang  :: escript_shebang(),
+			   comment  :: escript_comment(),
+			   emu_args :: escript_emu_args()}).
+
+escript_parse_file(File) ->
+    {HeaderSz, _LineNo, _Sections} = escript_parse_header(File),
+    escript_parse_archive(File, HeaderSz).
+
+%% Skip header and make a heuristic guess about the script type
+escript_parse_header(File) ->
+    LineNo = 1,
+    {ok, Fd} = prim_file:open(File, [read]),
+
+    %% Skip shebang on first line
+    {ok, HeaderSz0} = prim_file:position(Fd, cur),
+    Line1 = escript_get_line(Fd),
+    Res =
+	case escript_classify_line(Line1) of
+	    shebang ->
+		escript_find_first_body_line(Fd, HeaderSz0, LineNo,
+					     #escript_sections{shebang=Line1});
+	    archive ->
+		{HeaderSz0, LineNo, #escript_sections{type = archive}};
+	    beam ->
+		{HeaderSz0, LineNo, #escript_sections{type = beam}};
+	    _ ->
+		escript_find_first_body_line(Fd, HeaderSz0, LineNo,
+					     #escript_sections{})
+	end,
+    ok = prim_file:close(Fd),
+    Res.
+
+escript_find_first_body_line(Fd, HeaderSz0, LineNo, Sections) ->
+    {ok, HeaderSz1} = prim_file:position(Fd, cur),
+    %% Look for special comment on second line
+    Line2 = escript_get_line(Fd),
+    {ok, HeaderSz2} = prim_file:position(Fd, cur),
+    case escript_classify_line(Line2) of
+	emu_args ->
+	    %% Skip special comment on second line
+	    Line3 = escript_get_line(Fd),
+	    {HeaderSz2, LineNo + 2,
+	     Sections#escript_sections{type = escript_guess_type(Line3),
+				       comment = undefined,
+				       emu_args = Line2}};
+	Line2Type ->
+	    %% Look for special comment on third line
+	    Line3 = escript_get_line(Fd),
+	    {ok, HeaderSz3} = prim_file:position(Fd, cur),
+	    Line3Type = escript_classify_line(Line3),
+	    if
+		Line3Type =:= emu_args ->
+		    %% Skip special comment on third line
+		    Line4 = escript_get_line(Fd),
+		    {HeaderSz3, LineNo + 3,
+		     Sections#escript_sections{
+		       type = escript_guess_type(Line4),
+		       comment = Line2,
+		       emu_args = Line3}};
+		Sections#escript_sections.shebang =:= undefined ->
+		    %% No shebang. Use the entire file
+		    {HeaderSz0, LineNo,
+		     Sections#escript_sections{
+		       type = escript_guess_type(Line2)}};
+		Sections#escript_sections.shebang =:= undefined ->
+		    %% No shebang. Skip the first line
+		    {HeaderSz1, LineNo,
+		     Sections#escript_sections{
+		       type = escript_guess_type(Line2)}};
+		Line2Type =:= comment ->
+		    %% Skip shebang on first line and comment on second
+		    {HeaderSz2, LineNo + 2,
+		     Sections#escript_sections{
+		       type = escript_guess_type(Line3), comment = Line2}};
+		true ->
+		    %% Just skip shebang on first line
+		    {HeaderSz1, LineNo + 1,
+		     Sections#escript_sections{
+		       type = escript_guess_type(Line2)}}
+	    end
+    end.
+
+escript_classify_line(Line) ->
+    case Line of
+        "#!"   ++ _ -> shebang;
+        "PK"   ++ _ -> archive;
+        "FOR1" ++ _ -> beam;
+        "%%!"  ++ _ -> emu_args;
+        "%"    ++ _ -> comment;
+        _           -> undefined
+    end.
+
+escript_guess_type(Line) ->
+    case escript_classify_line(Line) of
+	archive -> archive;
+	beam    -> beam;
+	_       -> source
+    end.
+
+escript_get_line(Fd) ->
+    case prim_file:read_line(Fd) of
+	eof ->
+	    ok = prim_file:close(Fd),
+	    %% FIXME: are we supposed to call exit() here?
+	    exit({error, premature_eof_reached});
+	{ok, Line} ->
+	    Line
+    end.
+
+escript_parse_archive(File, HeaderSz) ->
+    case prim_file:read_file(File) of
+	{ok, <<_Header:HeaderSz/binary, ArchiveBin/binary>>} ->
+	    {ok, ArchiveBin};
+	{ok, _} ->
+	    {error, illegal_archive_format};
+	{error, _Reason}=Error ->
+	    Error
     end.
