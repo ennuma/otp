@@ -513,6 +513,7 @@ pi_locks(Eterm info)
     case am_messages:
     case am_message_queue_len:
     case am_total_heap_size:
+    case am_messages_received:
 	return ERTS_PROC_LOCK_MAIN|ERTS_PROC_LOCK_MSGQ;
     case am_memory:
 	return ERTS_PROC_LOCK_MAIN|ERTS_PROC_LOCK_LINK|ERTS_PROC_LOCK_MSGQ;
@@ -554,6 +555,7 @@ static Eterm pi_args[] = {
     am_suspending,
     am_min_heap_size,
     am_min_bin_vheap_size,
+    am_messages_received,
 #ifdef HYBRID
     am_message_binary
 #endif
@@ -602,8 +604,9 @@ pi_arg2ix(Eterm arg)
     case am_suspending:				return 26;
     case am_min_heap_size:			return 27;
     case am_min_bin_vheap_size:			return 28;
+    case am_messages_received:			return 29;
 #ifdef HYBRID
-    case am_message_binary:			return 29;
+    case am_message_binary:			return 30;
 #endif
     default:					return -1;
     }
@@ -627,7 +630,8 @@ static Eterm pi_1_keys[] = {
     am_stack_size,
     am_reductions,
     am_garbage_collection,
-    am_suspending
+    am_suspending,
+    am_messages_received
 };
 
 #define ERTS_PI_1_NO_OF_KEYS (sizeof(pi_1_keys)/sizeof(Eterm))
@@ -1596,6 +1600,16 @@ process_info_aux(Process *BIF_P,
 	    HRelease(BIF_P,limit,hp);
 	    return res;
 	}
+	break;
+    }
+
+    case am_messages_received: {
+	Uint hsz = 3;
+	Uint mr = rp->msgs_recvd;
+
+	(void) erts_bld_uint(NULL, &hsz, mr);
+	hp = HAlloc(BIF_P, hsz);
+	res = erts_bld_uint(&hp, NULL, mr);
 	break;
     }
 
@@ -3256,6 +3270,77 @@ BIF_RETTYPE erts_debug_get_internal_state_1(BIF_ALIST_1)
 #else
 	    BIF_RET(am_false);
 #endif
+	}
+    } else if (ERTS_IS_ATOM_STR("message_queues", BIF_ARG_1)) {
+	Uint i;
+	Uint msgq_nproc = 0;
+	Uint msgq_sum = 0;
+	Uint msgq_max = 0;
+	Eterm max_pid = am_undefined;
+	Uint msgq_nproc_nonzero = 0;
+	Uint64 msgs_recvd_sum = 0;
+	Uint64 msgs_recvd_max = 0;
+	Uint64 msgs_recvd_nproc_nonzero = 0;
+	Eterm msgs_recvd_max_pid = am_undefined;
+	Eterm res, *hp, **hpp;
+	Uint sz, *szp;
+	Eterm t[8];
+
+	erts_smp_proc_unlock(BIF_P, ERTS_PROC_LOCK_MAIN);
+	erts_smp_block_system(0);
+
+	for (i = 0; i < erts_max_processes; i++) {
+	    if (process_tab[i] != (Process*) 0) {
+		Process* p = process_tab[i];
+		Uint len;
+		Uint recvd;
+		ERTS_SMP_MSGQ_MV_INQ2PRIVQ(p);
+		len = p->msg.len;
+		msgq_nproc++;
+		if (len) {
+		    msgq_sum += len;
+		    msgq_nproc_nonzero++;
+		    if (len > msgq_max) {
+			msgq_max = len;
+			max_pid = p->id;
+		    }
+		}
+		recvd = p->msgs_recvd;
+		if (recvd) {
+		    msgs_recvd_sum += recvd;
+		    msgs_recvd_nproc_nonzero++;
+		    if (recvd > msgs_recvd_max) {
+			msgs_recvd_max = recvd;
+			msgs_recvd_max_pid = p->id;
+		    }
+		}
+	    }
+	}
+
+	erts_smp_release_system();
+	erts_smp_proc_lock(BIF_P, ERTS_PROC_LOCK_MAIN);
+
+	sz = 0;
+	szp = &sz;
+	hpp = NULL;
+	while (1) {
+	    i = 0;
+	    t[i++] = erts_bld_uint(hpp, szp, msgq_nproc);
+	    t[i++] = erts_bld_uint(hpp, szp, msgq_sum);
+	    t[i++] = erts_bld_uint(hpp, szp, msgq_nproc_nonzero);
+	    t[i++] = erts_bld_uint(hpp, szp, msgq_max);
+	    t[i++] = max_pid; sz++;
+	    t[i++] = erts_bld_uint(hpp, szp, msgs_recvd_sum);
+	    t[i++] = erts_bld_uint(hpp, szp, msgs_recvd_nproc_nonzero);
+	    t[i++] = erts_bld_uint(hpp, szp, msgs_recvd_max);
+	    t[i++] = msgs_recvd_max_pid; sz++;
+	    res = erts_bld_tuplev(hpp, szp, i, t);
+	    if (hpp) {
+		BIF_RET(res);
+	    }
+	    hp = HAlloc(BIF_P, sz);
+	    szp = NULL;
+	    hpp = &hp;
 	}
     }
     else if (is_tuple(BIF_ARG_1)) {

@@ -6378,6 +6378,7 @@ erl_create_process(Process* parent, /* Parent of process (default group leader).
     p->msg_inq.len = 0;
     p->bound_runq = NULL;
 #endif
+    p->msgs_recvd = 0;
     p->bif_timers = NULL;
     p->mbuf = NULL;
     p->mbuf_sz = 0;

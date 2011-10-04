@@ -312,6 +312,7 @@ atom message
 atom message_binary
 atom message_queue_len
 atom messages
+atom messages_received
 atom meta
 atom meta_match_spec
 atom min_heap_size

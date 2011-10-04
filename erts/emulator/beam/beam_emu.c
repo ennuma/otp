@@ -1785,6 +1785,7 @@ void process_main(void)
 	 }
 #endif
      }
+     c_p->msgs_recvd++;
      ErtsMoveMsgAttachmentIntoProc(msgp, c_p, E, HTOP, FCALLS,
 				   {
 				       SWAPOUT;

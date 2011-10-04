@@ -748,6 +748,8 @@ struct process {
     Uint space_verified;        /* Avoid HAlloc forcing heap fragments when */ 
     Eterm* space_verified_from; /* we rely on available heap space (TestHeap) */
 #endif
+
+    Uint msgs_recvd;
 };
 
 #ifdef CHECK_FOR_HOLES
