@@ -539,6 +539,26 @@ struct ErtsPendingSuspend_ {
 
 #endif
 
+typedef struct {
+    Uint64 count;
+    struct {
+	Uint64 count;
+	Uint64 time;
+	double sec1;
+	double sec10;
+	double sec100;
+	double sec1000;
+    } rate;
+} ErlMessageCount;
+
+#define ERTS_MSG_RATE_UPDATE_INTERVAL	1000000
+#define ERTS_MSG_RATE_MIN_COUNT		10000
+
+void erts_update_msg_rate (ErlMessageCount*);
+void erts_get_msg_rate (ErlMessageCount* c, Uint64* sec1, Uint64* sec10, Uint64* sec100, Uint64* sec1000);
+
+
+
 /* Defines to ease the change of memory architecture */
 #  define HEAP_START(p)     (p)->heap
 #  define HEAP_TOP(p)       (p)->htop
@@ -642,6 +662,7 @@ struct process {
 					     erlang:suspend_process/1 */
 
     ErlMessageQueue msg;	/* Message queue */
+    ErlMessageCount msg_deq;
 
     ErtsBifTimer *bif_timers;	/* Bif timers aiming at this process */
 
@@ -704,6 +725,9 @@ struct process {
     Uint32 runq_flags;
     Uint32 status_flags;
     ErlMessageInQueue msg_inq;
+#endif
+    ErlMessageCount msg_enq;
+#ifdef ERTS_SMP
     Eterm suspendee;
     ErtsPendingSuspend *pending_suspenders;
     ErtsPendExit pending_exit;
@@ -748,9 +772,8 @@ struct process {
     Uint space_verified;        /* Avoid HAlloc forcing heap fragments when */ 
     Eterm* space_verified_from; /* we rely on available heap space (TestHeap) */
 #endif
-
-    Uint msgs_recvd;
 };
+
 
 #ifdef CHECK_FOR_HOLES
 # define INIT_HOLE_CHECK(p)			\

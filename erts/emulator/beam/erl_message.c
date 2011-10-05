@@ -462,6 +462,11 @@ erts_queue_message(Process* receiver,
     LINK_MESSAGE(receiver, mp);
 #endif
 
+    if (++receiver->msg_enq.count >= ERTS_MSG_RATE_MIN_COUNT
+	&& erts_get_timer_time() - receiver->msg_enq.rate.time >= ERTS_MSG_RATE_UPDATE_INTERVAL)
+    {
+	erts_update_msg_rate(&receiver->msg_enq);
+    }
     notify_new_message(receiver);
 
     if (IS_TRACED_FL(receiver, F_TRACE_RECEIVE)) {

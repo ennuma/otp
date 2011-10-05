@@ -1785,7 +1785,6 @@ void process_main(void)
 	 }
 #endif
      }
-     c_p->msgs_recvd++;
      ErtsMoveMsgAttachmentIntoProc(msgp, c_p, E, HTOP, FCALLS,
 				   {
 				       SWAPOUT;
@@ -1846,6 +1845,11 @@ void process_main(void)
 	 msg = ERL_MESSAGE_TERM(msgp);
 	 seq_trace_output(SEQ_TRACE_TOKEN(c_p), msg, SEQ_TRACE_RECEIVE, 
 			  c_p->id, c_p);
+     }
+     if (++c_p->msg_deq.count >= ERTS_MSG_RATE_MIN_COUNT
+	 && erts_get_timer_time() >= c_p->msg_deq.rate.time + ERTS_MSG_RATE_UPDATE_INTERVAL)
+     {
+	 erts_update_msg_rate(&c_p->msg_deq);
      }
      UNLINK_MESSAGE(c_p, msgp);
      JOIN_MESSAGE(c_p);

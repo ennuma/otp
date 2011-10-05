@@ -513,7 +513,7 @@ pi_locks(Eterm info)
     case am_messages:
     case am_message_queue_len:
     case am_total_heap_size:
-    case am_messages_received:
+    case am_message_queue_stats:
 	return ERTS_PROC_LOCK_MAIN|ERTS_PROC_LOCK_MSGQ;
     case am_memory:
 	return ERTS_PROC_LOCK_MAIN|ERTS_PROC_LOCK_LINK|ERTS_PROC_LOCK_MSGQ;
@@ -555,7 +555,7 @@ static Eterm pi_args[] = {
     am_suspending,
     am_min_heap_size,
     am_min_bin_vheap_size,
-    am_messages_received,
+    am_message_queue_stats,
 #ifdef HYBRID
     am_message_binary
 #endif
@@ -604,7 +604,7 @@ pi_arg2ix(Eterm arg)
     case am_suspending:				return 26;
     case am_min_heap_size:			return 27;
     case am_min_bin_vheap_size:			return 28;
-    case am_messages_received:			return 29;
+    case am_message_queue_stats:			return 29;
 #ifdef HYBRID
     case am_message_binary:			return 30;
 #endif
@@ -631,7 +631,7 @@ static Eterm pi_1_keys[] = {
     am_reductions,
     am_garbage_collection,
     am_suspending,
-    am_messages_received
+    am_message_queue_stats
 };
 
 #define ERTS_PI_1_NO_OF_KEYS (sizeof(pi_1_keys)/sizeof(Eterm))
@@ -1603,13 +1603,46 @@ process_info_aux(Process *BIF_P,
 	break;
     }
 
-    case am_messages_received: {
-	Uint hsz = 3;
-	Uint mr = rp->msgs_recvd;
+    case am_message_queue_stats: {
+	Uint hsz = 6+6+4+3;
+	Uint64 e1, e10, e100, e1000;
+	Uint64 d1, d10, d100, d1000;
+	Eterm t1, t2, t3;
 
-	(void) erts_bld_uint(NULL, &hsz, mr);
+	ERTS_SMP_MSGQ_MV_INQ2PRIVQ(rp);
+	erts_update_msg_rate(&rp->msg_enq);
+	erts_get_msg_rate(&rp->msg_enq,&e1,&e10,&e100,&e1000);
+	erts_update_msg_rate(&rp->msg_deq);
+	erts_get_msg_rate(&rp->msg_deq,&d1,&d10,&d100,&d1000);
+	(void) erts_bld_uint(NULL, &hsz, rp->msg.len);
+	(void) erts_bld_uint64(NULL, &hsz, rp->msg_enq.count);
+	(void) erts_bld_uint64(NULL, &hsz, e1);
+	(void) erts_bld_uint64(NULL, &hsz, e10);
+	(void) erts_bld_uint64(NULL, &hsz, e100);
+	(void) erts_bld_uint64(NULL, &hsz, e1000);
+	(void) erts_bld_uint64(NULL, &hsz, rp->msg_deq.count);
+	(void) erts_bld_uint64(NULL, &hsz, d1);
+	(void) erts_bld_uint64(NULL, &hsz, d10);
+	(void) erts_bld_uint64(NULL, &hsz, d100);
+	(void) erts_bld_uint64(NULL, &hsz, d1000);
 	hp = HAlloc(BIF_P, hsz);
-	res = erts_bld_uint(&hp, NULL, mr);
+	t1 = erts_bld_uint64(&hp, NULL, rp->msg.len);
+	t2 = TUPLE5(hp,
+		    erts_bld_uint64(&hp, NULL, rp->msg_enq.count),
+		    erts_bld_uint64(&hp, NULL, e1),
+		    erts_bld_uint64(&hp, NULL, e10),
+		    erts_bld_uint64(&hp, NULL, e100),
+		    erts_bld_uint64(&hp, NULL, e1000));
+	hp += 6;
+	t3 = TUPLE5(hp,
+		    erts_bld_uint64(&hp, NULL, rp->msg_deq.count),
+		    erts_bld_uint64(&hp, NULL, d1),
+		    erts_bld_uint64(&hp, NULL, d10),
+		    erts_bld_uint64(&hp, NULL, d100),
+		    erts_bld_uint64(&hp, NULL, d1000));
+	hp += 6;
+	res = TUPLE3(hp, t1, t2, t3);
+	hp += 4;
 	break;
     }
 
@@ -3305,7 +3338,7 @@ BIF_RETTYPE erts_debug_get_internal_state_1(BIF_ALIST_1)
 			max_pid = p->id;
 		    }
 		}
-		recvd = p->msgs_recvd;
+		recvd = p->msg_deq.count;
 		if (recvd) {
 		    msgs_recvd_sum += recvd;
 		    msgs_recvd_nproc_nonzero++;
