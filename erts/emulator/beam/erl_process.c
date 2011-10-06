@@ -7962,7 +7962,7 @@ erts_update_msg_rate (ErlMessageCount* c)
     if (c->rate.time) {
 	Uint64 tdiff = t - c->rate.time;
 	if (tdiff >= ERTS_MSG_RATE_UPDATE_INTERVAL) {
-	    double dt = (double)() / 1000000.;
+	    double dt = (double)tdiff / 1000000.;
 	    double rate = (double)(c->count - c->rate.count) / dt;
 	    update_msg_rate(&c->rate.sec1, rate, dt, 1.);
 	    update_msg_rate(&c->rate.sec10, rate, dt, 10.);
