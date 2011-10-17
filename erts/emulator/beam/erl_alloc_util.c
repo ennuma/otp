@@ -1307,6 +1307,15 @@ create_carrier(Allctr_t *allctr, Uint umem_sz, UWord flags)
 #ifdef DEBUG
     is_mseg = 1;
 #endif
+    {
+	/* Modify each page so that we get super pages as quickly as possible. */
+	char* p = (char*)crr;
+	char* pend = p + crr_sz;
+	while (p < pend) {
+	    *p = 0xeb;
+	    p += mseg_unit_size;
+	}
+    }
     if (flags & CFLG_SBC) {
 	SET_CARRIER_HDR(crr, crr_sz, SCH_MSEG|SCH_SBC);
 	STAT_MSEG_SBC_ALLOC(allctr, crr_sz, blk_sz);
