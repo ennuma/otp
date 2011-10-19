@@ -3430,6 +3430,7 @@ BIF_RETTYPE erts_debug_get_internal_state_1(BIF_ALIST_1)
 	    BIF_RET(am_false);
 #endif
 	}
+    }
     else if (is_tuple(BIF_ARG_1)) {
 	Eterm* tp = tuple_val(BIF_ARG_1);
 	switch (arityval(tp[0])) {
