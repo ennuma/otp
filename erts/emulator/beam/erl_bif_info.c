@@ -3127,6 +3127,132 @@ BIF_RETTYPE statistics_1(BIF_ALIST_1)
 	hp += 3;
 	BIF_RET(TUPLE2(hp, r1, r2));
     }
+    else if (ERTS_IS_ATOM_STR("message_queues", BIF_ARG_1)) {
+	Uint i;
+	Uint nproc = 0;
+	Uint msgq_sum = 0;
+	Uint msgq_max = 0;
+	Eterm max_pid = am_undefined;
+	Uint msgq_nproc_nonzero = 0;
+	Eterm res, *hp, **hpp;
+	Uint sz, *szp;
+	Eterm t[5];
+
+	erts_smp_proc_unlock(BIF_P, ERTS_PROC_LOCK_MAIN);
+	erts_smp_block_system(0);
+
+	for (i = 0; i < erts_max_processes; i++) {
+	    if (process_tab[i] != (Process*) 0) {
+		Process* p = process_tab[i];
+		Uint len;
+		ERTS_SMP_MSGQ_MV_INQ2PRIVQ(p);
+		len = p->msg.len;
+		nproc++;
+		if (len) {
+		    msgq_sum += len;
+		    msgq_nproc_nonzero++;
+		    if (len > msgq_max) {
+			msgq_max = len;
+			max_pid = p->id;
+		    }
+		}
+	    }
+	}
+
+	erts_smp_release_system();
+	erts_smp_proc_lock(BIF_P, ERTS_PROC_LOCK_MAIN);
+
+	sz = 0;
+	szp = &sz;
+	hpp = NULL;
+	while (1) {
+	    i = 0;
+	    t[i++] = erts_bld_uint(hpp, szp, nproc);
+	    t[i++] = erts_bld_uint(hpp, szp, msgq_sum);
+	    t[i++] = erts_bld_uint(hpp, szp, msgq_nproc_nonzero);
+	    t[i++] = erts_bld_uint(hpp, szp, msgq_max);
+	    t[i++] = max_pid; ++sz;
+	    res = erts_bld_tuplev(hpp, szp, i, t);
+	    if (hpp) {
+		BIF_RET(res);
+	    }
+	    hp = HAlloc(BIF_P, sz);
+	    szp = NULL;
+	    hpp = &hp;
+	}
+    }
+    else if (ERTS_IS_ATOM_STR("message_counts", BIF_ARG_1)) {
+	Uint i;
+	Uint nproc = 0;
+	Uint64 msgs_recvd_sum = 0;
+	Uint64 msgs_recvd_max = 0;
+	Uint64 msgs_recvd_nproc_nonzero = 0;
+	Eterm msgs_recvd_max_pid = am_undefined;
+	Uint64 msgs_sent_sum = 0;
+	Uint64 msgs_sent_max = 0;
+	Uint64 msgs_sent_nproc_nonzero = 0;
+	Eterm msgs_sent_max_pid = am_undefined;
+	Eterm res, *hp, **hpp;
+	Uint sz, *szp;
+	Eterm t[9];
+
+	erts_smp_proc_unlock(BIF_P, ERTS_PROC_LOCK_MAIN);
+	erts_smp_block_system(0);
+
+	for (i = 0; i < erts_max_processes; i++) {
+	    if (process_tab[i] != (Process*) 0) {
+		Process* p = process_tab[i];
+		Uint recvd;
+		Uint sent;
+		ERTS_SMP_MSGQ_MV_INQ2PRIVQ(p);
+		nproc++;
+		recvd = p->msg_deq.count;
+		if (recvd) {
+		    msgs_recvd_sum += recvd;
+		    msgs_recvd_nproc_nonzero++;
+		    if (recvd > msgs_recvd_max) {
+			msgs_recvd_max = recvd;
+			msgs_recvd_max_pid = p->id;
+		    }
+		}
+		sent = p->msg_enq.count;
+		if (sent) {
+		    msgs_sent_sum += sent;
+		    msgs_sent_nproc_nonzero++;
+		    if (sent > msgs_sent_max) {
+			msgs_sent_max = sent;
+			msgs_sent_max_pid = p->id;
+		    }
+		}
+	    }
+	}
+
+	erts_smp_release_system();
+	erts_smp_proc_lock(BIF_P, ERTS_PROC_LOCK_MAIN);
+
+	sz = 0;
+	szp = &sz;
+	hpp = NULL;
+	while (1) {
+	    i = 0;
+	    t[i++] = erts_bld_uint(hpp, szp, nproc);
+	    t[i++] = erts_bld_uint(hpp, szp, msgs_recvd_sum);
+	    t[i++] = erts_bld_uint(hpp, szp, msgs_recvd_nproc_nonzero);
+	    t[i++] = erts_bld_uint(hpp, szp, msgs_recvd_max);
+	    t[i++] = msgs_recvd_max_pid; sz++;
+	    t[i++] = erts_bld_uint(hpp, szp, msgs_sent_sum);
+	    t[i++] = erts_bld_uint(hpp, szp, msgs_sent_nproc_nonzero);
+	    t[i++] = erts_bld_uint(hpp, szp, msgs_sent_max);
+	    t[i++] = msgs_recvd_max_pid; sz++;
+	    res = erts_bld_tuplev(hpp, szp, i, t);
+	    if (hpp) {
+		BIF_RET(res);
+	    }
+	    hp = HAlloc(BIF_P, sz);
+	    szp = NULL;
+	    hpp = &hp;
+	}
+    }
     else if (ERTS_IS_ATOM_STR("run_queues", BIF_ARG_1)) {
 	Eterm res, *hp, **hpp;
 	Uint sz, *szp;
@@ -3177,7 +3303,7 @@ BIF_RETTYPE statistics_1(BIF_ALIST_1)
 	b6 = erts_bld_uint64(&hp, NULL, runq_samples);
 	b7 = erts_bld_uint64(&hp, NULL, waits);
 	b8 = erts_bld_uint64(&hp, NULL, sleeps);
-	res = TUPLE8(hp, b1, b2, b3, b4, b5, b6, b7, b8); 
+	res = TUPLE8(hp, b1, b2, b3, b4, b5, b6, b7, b8);
 	BIF_RET(res);
     }
     BIF_ERROR(BIF_P, BADARG);
@@ -3304,78 +3430,6 @@ BIF_RETTYPE erts_debug_get_internal_state_1(BIF_ALIST_1)
 	    BIF_RET(am_false);
 #endif
 	}
-    } else if (ERTS_IS_ATOM_STR("message_queues", BIF_ARG_1)) {
-	Uint i;
-	Uint msgq_nproc = 0;
-	Uint msgq_sum = 0;
-	Uint msgq_max = 0;
-	Eterm max_pid = am_undefined;
-	Uint msgq_nproc_nonzero = 0;
-	Uint64 msgs_recvd_sum = 0;
-	Uint64 msgs_recvd_max = 0;
-	Uint64 msgs_recvd_nproc_nonzero = 0;
-	Eterm msgs_recvd_max_pid = am_undefined;
-	Eterm res, *hp, **hpp;
-	Uint sz, *szp;
-	Eterm t[8];
-
-	erts_smp_proc_unlock(BIF_P, ERTS_PROC_LOCK_MAIN);
-	erts_smp_block_system(0);
-
-	for (i = 0; i < erts_max_processes; i++) {
-	    if (process_tab[i] != (Process*) 0) {
-		Process* p = process_tab[i];
-		Uint len;
-		Uint recvd;
-		ERTS_SMP_MSGQ_MV_INQ2PRIVQ(p);
-		len = p->msg.len;
-		msgq_nproc++;
-		if (len) {
-		    msgq_sum += len;
-		    msgq_nproc_nonzero++;
-		    if (len > msgq_max) {
-			msgq_max = len;
-			max_pid = p->id;
-		    }
-		}
-		recvd = p->msg_deq.count;
-		if (recvd) {
-		    msgs_recvd_sum += recvd;
-		    msgs_recvd_nproc_nonzero++;
-		    if (recvd > msgs_recvd_max) {
-			msgs_recvd_max = recvd;
-			msgs_recvd_max_pid = p->id;
-		    }
-		}
-	    }
-	}
-
-	erts_smp_release_system();
-	erts_smp_proc_lock(BIF_P, ERTS_PROC_LOCK_MAIN);
-
-	sz = 0;
-	szp = &sz;
-	hpp = NULL;
-	while (1) {
-	    i = 0;
-	    t[i++] = erts_bld_uint(hpp, szp, msgq_nproc);
-	    t[i++] = erts_bld_uint(hpp, szp, msgq_sum);
-	    t[i++] = erts_bld_uint(hpp, szp, msgq_nproc_nonzero);
-	    t[i++] = erts_bld_uint(hpp, szp, msgq_max);
-	    t[i++] = max_pid; sz++;
-	    t[i++] = erts_bld_uint(hpp, szp, msgs_recvd_sum);
-	    t[i++] = erts_bld_uint(hpp, szp, msgs_recvd_nproc_nonzero);
-	    t[i++] = erts_bld_uint(hpp, szp, msgs_recvd_max);
-	    t[i++] = msgs_recvd_max_pid; sz++;
-	    res = erts_bld_tuplev(hpp, szp, i, t);
-	    if (hpp) {
-		BIF_RET(res);
-	    }
-	    hp = HAlloc(BIF_P, sz);
-	    szp = NULL;
-	    hpp = &hp;
-	}
-    }
     else if (is_tuple(BIF_ARG_1)) {
 	Eterm* tp = tuple_val(BIF_ARG_1);
 	switch (arityval(tp[0])) {
