@@ -1570,6 +1570,42 @@ BIF_RETTYPE process_flag_2(BIF_ALIST_2)
        erts_smp_proc_unlock(BIF_P, ERTS_PROC_LOCKS_ALL_MINOR);
        BIF_RET(old_value);
    }
+   else if (BIF_ARG_1 == am_flush_message_queue) {
+       Sint i;
+       Sint n = 0;
+       ErlMessage* mp;
+
+       if (!is_small(BIF_ARG_2)) {
+	   goto error;
+       }
+       i = unsigned_val(BIF_ARG_2);
+       erts_smp_proc_lock(BIF_P, ERTS_PROC_LOCK_MAIN|ERTS_PROC_LOCK_MSGQ);
+       ERTS_SMP_MSGQ_MV_INQ2PRIVQ(BIF_P);
+       mp = BIF_P->msg.first;
+       while(mp != NULL) {
+	   ErlMessage* next_mp = mp->next;
+	   ++n;
+	   if (mp->data.attached) {
+	       if (is_value(mp->m[0]))
+		   free_message_buffer(mp->data.heap_frag);
+	       else {
+		   if (is_not_nil(mp->m[1])) {
+		       ErlHeapFragment *heap_frag;
+		       heap_frag = (ErlHeapFragment *) mp->data.dist_ext->ext_endp;
+		       erts_cleanup_offheap(&heap_frag->off_heap);
+		   }
+		   erts_free_dist_ext_copy(mp->data.dist_ext);
+	       }
+	   }
+	   free_message(mp);
+	   mp = next_mp;
+       }
+       BIF_P->msg.first = NULL;
+       BIF_P->msg.last = &BIF_P->msg.first;
+       BIF_P->msg.save = &BIF_P->msg.first;
+       BIF_P->msg.len = 0;
+       erts_smp_proc_unlock(BIF_P, ERTS_PROC_LOCK_MAIN|ERTS_PROC_LOCK_MSGQ);
+       BIF_RET(n);
    else if (BIF_ARG_1 == am_monitor_nodes) {
        /*
 	* This argument is intentionally *not* documented. It is intended
