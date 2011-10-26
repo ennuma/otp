@@ -1606,6 +1606,7 @@ BIF_RETTYPE process_flag_2(BIF_ALIST_2)
        BIF_P->msg.len = 0;
        erts_smp_proc_unlock(BIF_P, ERTS_PROC_LOCK_MAIN|ERTS_PROC_LOCK_MSGQ);
        BIF_RET(n);
+   }
    else if (BIF_ARG_1 == am_monitor_nodes) {
        /*
 	* This argument is intentionally *not* documented. It is intended
