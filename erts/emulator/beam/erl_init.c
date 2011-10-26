@@ -510,6 +510,7 @@ void erts_usage(void)
     erts_fprintf(stderr, "-rg amount  set reader groups limit\n");
     erts_fprintf(stderr, "-sbt type   set scheduler bind type, valid types are:\n");
     erts_fprintf(stderr, "            u|ns|ts|ps|s|nnts|nnps|tnnps|db\n");
+    erts_fprintf(stderr, "-scr reds   set scheduler context reductions\n");
     erts_fprintf(stderr, "-sct cput   set cpu topology,\n");
     erts_fprintf(stderr, "            see the erl(1) documentation for more info.\n");
     erts_fprintf(stderr, "-swt val    set scheduler wakeup threshold, valid values are:\n");
@@ -1153,6 +1154,18 @@ erl_start(int argc, char **argv)
 				 estr);
 		    erts_usage();
 		}
+	    }
+	    else if (has_prefix("cr", sub_param)) {
+		int reds;
+
+		arg = get_arg(sub_param+2, argv[i+1], &i);
+		if (sscanf(arg, "%d", &reds) != 1 || reds <= 0) {
+		    erts_fprintf(stderr,
+				 "bad context reductions value: %s\n",
+				 arg);
+		    erts_usage();
+		}
+		erts_sched_set_context_reds(reds);
 	    }
 	    else if (has_prefix("ct", sub_param)) {
 		arg = get_arg(sub_param+2, argv[i+1], &i);

@@ -46,7 +46,11 @@
 #define EMULATOR "BEAM"
 #define SEQ_TRACE 1
 
-#define CONTEXT_REDS 2000	/* Swap process out after this number */
+#define ERTS_DEFAULT_CONTEXT_REDS 2000
+extern erts_smp_atomic32_t erts_context_reds;
+#define CONTEXT_REDS erts_smp_atomic32_read(&erts_context_reds)	/* Swap process out after this number */
+#define erts_sched_set_context_reds(reds) erts_smp_atomic32_xchg(&erts_context_reds, reds)
+
 #define MAX_ARG 255	        /* Max number of arguments allowed */
 #define MAX_REG 1024            /* Max number of x(N) registers used */
 
