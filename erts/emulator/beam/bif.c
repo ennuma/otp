@@ -1418,6 +1418,58 @@ static BIF_RETTYPE process_flag_aux(Process *BIF_P,
        else
 	   BIF_RET(old_value);
    }
+   else if (flag == am_flush_message_queue) {
+       Sint i;
+       Sint n = 0;
+       ErlMessage* mp;
+
+       if (!is_small(val)) {
+	   goto error;
+       }
+       i = signed_val(val);
+       if (i < 0) {
+	   goto error;
+       }
+
+       erts_smp_proc_lock(rp, ERTS_PROC_LOCK_MSGQ);
+       ERTS_SMP_MSGQ_MV_INQ2PRIVQ(rp);
+       mp = rp->msg.first;
+       while(mp != NULL) {
+	   ErlMessage* next_mp = mp->next;
+	   if (i > 0 && n >= i) {
+	       break;
+	   }
+	   ++n;
+	   if (mp->data.attached) {
+	       if (is_value(mp->m[0]))
+		   free_message_buffer(mp->data.heap_frag);
+	       else {
+		   if (is_not_nil(mp->m[1])) {
+		       ErlHeapFragment *heap_frag;
+		       heap_frag = (ErlHeapFragment *) mp->data.dist_ext->ext_endp;
+		       erts_cleanup_offheap(&heap_frag->off_heap);
+		   }
+		   erts_free_dist_ext_copy(mp->data.dist_ext);
+	       }
+	   }
+	   if (rp->msg.save == &mp->next) {
+	       rp->msg.save = &rp->msg.first;
+	   }
+	   free_message(mp);
+	   mp = next_mp;
+       }
+       if (mp) {
+	   rp->msg.first = mp;
+	   rp->msg.len -= n;
+       } else {
+	   rp->msg.first = NULL;
+	   rp->msg.last = &rp->msg.first;
+	   rp->msg.save = &rp->msg.first;
+	   rp->msg.len = 0;
+       }
+       erts_smp_proc_unlock(rp, ERTS_PROC_LOCK_MSGQ);
+       BIF_RET(make_small(n));
+   }
 
  error:
    BIF_ERROR(BIF_P, BADARG);
@@ -1569,43 +1621,6 @@ BIF_RETTYPE process_flag_2(BIF_ALIST_2)
        }
        erts_smp_proc_unlock(BIF_P, ERTS_PROC_LOCKS_ALL_MINOR);
        BIF_RET(old_value);
-   }
-   else if (BIF_ARG_1 == am_flush_message_queue) {
-       Sint i;
-       Sint n = 0;
-       ErlMessage* mp;
-
-       if (!is_small(BIF_ARG_2)) {
-	   goto error;
-       }
-       i = unsigned_val(BIF_ARG_2);
-       erts_smp_proc_lock(BIF_P, ERTS_PROC_LOCK_MAIN|ERTS_PROC_LOCK_MSGQ);
-       ERTS_SMP_MSGQ_MV_INQ2PRIVQ(BIF_P);
-       mp = BIF_P->msg.first;
-       while(mp != NULL) {
-	   ErlMessage* next_mp = mp->next;
-	   ++n;
-	   if (mp->data.attached) {
-	       if (is_value(mp->m[0]))
-		   free_message_buffer(mp->data.heap_frag);
-	       else {
-		   if (is_not_nil(mp->m[1])) {
-		       ErlHeapFragment *heap_frag;
-		       heap_frag = (ErlHeapFragment *) mp->data.dist_ext->ext_endp;
-		       erts_cleanup_offheap(&heap_frag->off_heap);
-		   }
-		   erts_free_dist_ext_copy(mp->data.dist_ext);
-	       }
-	   }
-	   free_message(mp);
-	   mp = next_mp;
-       }
-       BIF_P->msg.first = NULL;
-       BIF_P->msg.last = &BIF_P->msg.first;
-       BIF_P->msg.save = &BIF_P->msg.first;
-       BIF_P->msg.len = 0;
-       erts_smp_proc_unlock(BIF_P, ERTS_PROC_LOCK_MAIN|ERTS_PROC_LOCK_MSGQ);
-       BIF_RET(n);
    }
    else if (BIF_ARG_1 == am_monitor_nodes) {
        /*
@@ -4111,11 +4126,11 @@ BIF_RETTYPE system_flag_2(BIF_ALIST_2)
 	    goto error;
         old = erts_sched_set_spincount(ERTS_SET_SCHED_SUSPEND_SPINCOUNT,unsigned_val(BIF_ARG_2));
 	BIF_RET(make_small(old));
-    } else if (ERTS_IS_ATOM_STR("scheduler_context_reds", BIF_ARG_1)) {
+    } else if (ERTS_IS_ATOM_STR("scheduler_context_reductions", BIF_ARG_1)) {
         erts_aint32_t old;
 	if (!is_small(BIF_ARG_2))
 	    goto error;
-	old = erts_sched_set_context_reds(count);
+	old = erts_sched_set_context_reds(unsigned_val(BIF_ARG_2));
 	BIF_RET(make_small(old));
     }
     error:
