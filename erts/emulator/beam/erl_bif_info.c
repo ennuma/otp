@@ -1604,16 +1604,19 @@ process_info_aux(Process *BIF_P,
     }
 
     case am_message_queue_stats: {
-	Uint hsz = 6+6+4+3;
+	Uint hsz = 6+6+6+5+3;
 	Uint64 e1, e10, e100, e1000;
 	Uint64 d1, d10, d100, d1000;
-	Eterm t1, t2, t3;
+	Uint64 s1, s10, s100, s1000;
+	Eterm t1, t2, t3, t4;
 
 	ERTS_SMP_MSGQ_MV_INQ2PRIVQ(rp);
 	erts_update_msg_rate(&rp->msg_enq);
 	erts_get_msg_rate(&rp->msg_enq,&e1,&e10,&e100,&e1000);
 	erts_update_msg_rate(&rp->msg_deq);
 	erts_get_msg_rate(&rp->msg_deq,&d1,&d10,&d100,&d1000);
+	erts_update_msg_rate(&rp->msg_send);
+	erts_get_msg_rate(&rp->msg_send,&s1,&s10,&s100,&s1000);
 	(void) erts_bld_uint(NULL, &hsz, rp->msg.len);
 	(void) erts_bld_uint64(NULL, &hsz, rp->msg_enq.count);
 	(void) erts_bld_uint64(NULL, &hsz, e1);
@@ -1625,8 +1628,13 @@ process_info_aux(Process *BIF_P,
 	(void) erts_bld_uint64(NULL, &hsz, d10);
 	(void) erts_bld_uint64(NULL, &hsz, d100);
 	(void) erts_bld_uint64(NULL, &hsz, d1000);
+	(void) erts_bld_uint64(NULL, &hsz, rp->msg_send.count);
+	(void) erts_bld_uint64(NULL, &hsz, s1);
+	(void) erts_bld_uint64(NULL, &hsz, s10);
+	(void) erts_bld_uint64(NULL, &hsz, s100);
+	(void) erts_bld_uint64(NULL, &hsz, s1000);
 	hp = HAlloc(BIF_P, hsz);
-	t1 = erts_bld_uint64(&hp, NULL, rp->msg.len);
+	t1 = erts_bld_uint(&hp, NULL, rp->msg.len);
 	t2 = TUPLE5(hp,
 		    erts_bld_uint64(&hp, NULL, rp->msg_enq.count),
 		    erts_bld_uint64(&hp, NULL, e1),
@@ -1641,8 +1649,15 @@ process_info_aux(Process *BIF_P,
 		    erts_bld_uint64(&hp, NULL, d100),
 		    erts_bld_uint64(&hp, NULL, d1000));
 	hp += 6;
-	res = TUPLE3(hp, t1, t2, t3);
-	hp += 4;
+	t4 = TUPLE5(hp,
+		    erts_bld_uint64(&hp, NULL, rp->msg_send.count),
+		    erts_bld_uint64(&hp, NULL, s1),
+		    erts_bld_uint64(&hp, NULL, s10),
+		    erts_bld_uint64(&hp, NULL, s100),
+		    erts_bld_uint64(&hp, NULL, s1000));
+	hp += 6;
+	res = TUPLE4(hp, t1, t2, t3, t4);
+	hp += 5;
 	break;
     }
 

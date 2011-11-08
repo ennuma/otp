@@ -557,6 +557,15 @@ typedef struct {
 void erts_update_msg_rate (ErlMessageCount*);
 void erts_get_msg_rate (ErlMessageCount* c, Uint64* sec1, Uint64* sec10, Uint64* sec100, Uint64* sec1000);
 
+static ERTS_INLINE void
+erts_incr_message_count (ErlMessageCount* c)
+{
+    if (++c->count >= ERTS_MSG_RATE_MIN_COUNT
+	    && erts_get_timer_time() - c->rate.time >= ERTS_MSG_RATE_UPDATE_INTERVAL)
+    {
+	erts_update_msg_rate(c);
+    }
+}
 
 
 /* Defines to ease the change of memory architecture */
@@ -772,6 +781,8 @@ struct process {
     Uint space_verified;        /* Avoid HAlloc forcing heap fragments when */ 
     Eterm* space_verified_from; /* we rely on available heap space (TestHeap) */
 #endif
+
+    ErlMessageCount msg_send;
 };
 
 
