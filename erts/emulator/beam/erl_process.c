@@ -6393,6 +6393,13 @@ erl_create_process(Process* parent, /* Parent of process (default group leader).
     p->msg_deq.rate.sec10 = 0;
     p->msg_deq.rate.sec100 = 0;
     p->msg_deq.rate.sec1000 = 0;
+    p->msg_send.count = 0;
+    p->msg_send.rate.count = 0;
+    p->msg_send.rate.time = 0;
+    p->msg_send.rate.sec1 = 0;
+    p->msg_send.rate.sec10 = 0;
+    p->msg_send.rate.sec100 = 0;
+    p->msg_send.rate.sec1000 = 0;
     p->bif_timers = NULL;
     p->mbuf = NULL;
     p->mbuf_sz = 0;

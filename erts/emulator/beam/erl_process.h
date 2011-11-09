@@ -671,7 +671,8 @@ struct process {
 					     erlang:suspend_process/1 */
 
     ErlMessageQueue msg;	/* Message queue */
-    ErlMessageCount msg_deq;
+    ErlMessageCount msg_deq;	/* Count of messages dequeued for this process */
+    ErlMessageCount msg_send;	/* Count of messages sent by this process */
 
     ErtsBifTimer *bif_timers;	/* Bif timers aiming at this process */
 
@@ -735,7 +736,7 @@ struct process {
     Uint32 status_flags;
     ErlMessageInQueue msg_inq;
 #endif
-    ErlMessageCount msg_enq;
+    ErlMessageCount msg_enq;	/* Count of messages enqueued for this process */
 #ifdef ERTS_SMP
     Eterm suspendee;
     ErtsPendingSuspend *pending_suspenders;
@@ -781,8 +782,6 @@ struct process {
     Uint space_verified;        /* Avoid HAlloc forcing heap fragments when */ 
     Eterm* space_verified_from; /* we rely on available heap space (TestHeap) */
 #endif
-
-    ErlMessageCount msg_send;
 };
 
 
