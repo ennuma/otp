@@ -7985,14 +7985,6 @@ erts_update_msg_rate (ErlMessageCount* c)
     }
 }
 
-void
-erts_get_msg_rate (ErlMessageCount* c, Uint64* sec1, Uint64* sec10, Uint64* sec100, Uint64* sec1000)
-{
-    *sec1 = c->rate.sec1;
-    *sec10 = c->rate.sec10;
-    *sec100 = c->rate.sec100;
-    *sec1000 = c->rate.sec1000;
-}
 
 
 /*

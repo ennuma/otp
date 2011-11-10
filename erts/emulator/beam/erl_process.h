@@ -555,7 +555,6 @@ typedef struct {
 #define ERTS_MSG_RATE_MIN_COUNT		10000
 
 void erts_update_msg_rate (ErlMessageCount*);
-void erts_get_msg_rate (ErlMessageCount* c, Uint64* sec1, Uint64* sec10, Uint64* sec100, Uint64* sec1000);
 
 static ERTS_INLINE void
 erts_incr_message_count (ErlMessageCount* c)
