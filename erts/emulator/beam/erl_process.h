@@ -560,7 +560,7 @@ static ERTS_INLINE void
 erts_incr_message_count (ErlMessageCount* c)
 {
     if (++c->count >= ERTS_MSG_RATE_MIN_COUNT
-	    && erts_get_timer_time() - c->rate.time >= ERTS_MSG_RATE_UPDATE_INTERVAL)
+	    && erts_get_timer_time()*1000 - c->rate.time >= ERTS_MSG_RATE_UPDATE_INTERVAL)
     {
 	erts_update_msg_rate(c);
     }

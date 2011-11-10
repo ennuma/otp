@@ -964,10 +964,10 @@ BIF_RETTYPE process_info_2(BIF_ALIST_2)
 }
 
 
-static void
-build_rate_tuple (Eterm* hpp, Uint* hszp, const ErlMessageCount* c)
+static Eterm
+build_rate_tuple (Eterm** hpp, Uint* hszp, ErlMessageCount* c)
 {
-    Eterm res, t0, t1, t2, t3, t4, t5;
+    Eterm res, t0, t1, t2, t3, t4;
     if (!hpp) {
 	erts_update_msg_rate(c);
     }
@@ -980,12 +980,12 @@ build_rate_tuple (Eterm* hpp, Uint* hszp, const ErlMessageCount* c)
     t3 = erts_bld_uint64(hpp, hszp, c->rate.sec100);
     t4 = erts_bld_uint64(hpp, hszp, c->rate.sec1000);
     if (hpp) {
-	res = TUPLE5(*hpp, t0, t1, t2, t3, t4, t5);
+	res = TUPLE5(*hpp, t0, t1, t2, t3, t4);
 	*hpp += 6;
     } else {
 	res = 0;
     }
-    return 0;
+    return res;
 }
 
 
@@ -1630,7 +1630,7 @@ process_info_aux(Process *BIF_P,
     }
 
     case am_message_queue_stats: {
-	Eterm* hpp = NULL;
+	Eterm** hpp = NULL;
 	Uint hsz = 5+3;
 	Uint* hszp = &hsz;
 
