@@ -1,0 +1,28 @@
+#TARG      := $(shell grep -h -v ^\# ../../../../server/erl/*/mirrors ../../../../server/setup/mirrors)
+FOR       := for i in $(TARG); do
+FORKDONE  :=& done; wait
+DONE      :=; done
+RSYNC     := rsync -t -C -r --exclude-from=/dev/stdin
+IGNORE    := svn propget svn:ignore
+U         ?= whatsapp
+ROOT      ?= /home/$(U)
+
+TMP	  := /tmp/wa-erts-install
+BIN	  := /usr/local/lib/erlang/erts-5.8.4/bin
+VER	  := $(shell cat wa-version)
+ERL_TOP	  := `pwd`
+TARGET	  := x86_64-unknown-freebsd8.2
+
+host-prep:
+	ssh -t $(H) sudo ln -s $(BIN)/beam.smp $(BIN)/beam.smp.orig
+	ssh -t $(H) sudo ln -s $(BIN)/erlexec $(BIN)/erlexec.orig
+
+host-install:
+	ssh $(H) mkdir -p /tmp/wa-erts-install
+	scp -C bin/$(TARGET)/beam.smp bin/$(TARGET)/erlexec $(H):/tmp/wa-erts-install
+	ssh -t $(H) sudo cp $(TMP)/beam.smp $(BIN)/beam.smp.$(VER)
+	ssh -t $(H) sudo cp $(TMP)/erlexec $(BIN)/erlexec.$(VER)
+
+host-enable:
+	ssh -t $(H) sudo ln -sf $(BIN)/beam.smp.$(VER) $(BIN)/beam.smp
+	ssh -t $(H) sudo ln -sf $(BIN)/erlexec.$(VER) $(BIN)/erlexec
