@@ -20,11 +20,13 @@ host-prep:
 
 host-install:
 	ssh $(H) mkdir -p /tmp/wa-erts-install
-	scp -C bin/$(TARGET)/beam.smp bin/$(TARGET)/erlexec lib/kernel/ebin/inet_tcp_dist.beam lib/kernel/src/inet_tcp_dist.erl $(H):$(TMP)
+	scp -C bin/$(TARGET)/beam.smp bin/$(TARGET)/erlexec lib/kernel/ebin/inet_tcp_dist.beam lib/kernel/src/inet_tcp_dist.erl lib/mnesia/src/mnesia_tm.erl lib/mnesia/ebin/mnesia_tm.beam $(H):$(TMP)
 	ssh -t $(H) sudo cp $(TMP)/beam.smp $(BIN)/beam.smp.$(VER)
 	ssh -t $(H) sudo cp $(TMP)/erlexec $(BIN)/erlexec.$(VER)
 	ssh -t $(H) sudo cp $(TMP)/inet_tcp_dist.beam $(ERL)/lib/kernel-2.14.4/ebin
 	ssh -t $(H) sudo cp $(TMP)/inet_tcp_dist.erl $(ERL)/lib/kernel-2.14.4/src
+	ssh -t $(H) sudo cp $(TMP)/mnesia_tm.beam $(ERL)/lib/mnesia-4.4.19/ebin
+	ssh -t $(H) sudo cp $(TMP)/mnesia_tm.erl $(ERL)/lib/mneisa-4.4.19/src
 
 host-enable:
 	ssh -t $(H) sudo ln -sf $(BIN)/beam.smp.$(VER) $(BIN)/beam.smp

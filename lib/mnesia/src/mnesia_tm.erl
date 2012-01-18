@@ -50,6 +50,8 @@
 	 system_code_change/4
 	]).
 
+-export([start_dirty_ram_updater/1, dirty_ram_updater/1, dirty_ram_updater_loop/0]).
+
 -include("mnesia.hrl").
 -import(mnesia_lib, [set/2]).
 -import(mnesia_lib, [fatal/2, verbose/2, dbg_out/2]).
@@ -470,10 +472,45 @@ do_sync_dirty(From, Tid, Commit, _Tab) ->
     ?eval_debug_fun({?MODULE, sync_dirty, post}, [{tid, Tid}]),
     From ! {?MODULE, node(), {dirty_res, Res}}.
 
+do_async_dirty(Tid, Commit, _Tab) when Commit#commit.schema_ops == [],
+				       Commit#commit.snmp == [],
+				       Commit#commit.disc_copies == [],
+				       Commit#commit.disc_only_copies == [] ->
+    do_dirty_ram_update(Tid, Commit#commit.ram_copies);
 do_async_dirty(Tid, Commit, _Tab) ->
     ?eval_debug_fun({?MODULE, async_dirty, pre}, [{tid, Tid}]),
     catch do_dirty(Tid, Commit),
     ?eval_debug_fun({?MODULE, async_dirty, post}, [{tid, Tid}]).
+
+do_dirty_ram_update (Tid, [{{Tab, _K}, _Obj, _OpType} = Op | Ops] = OpList) ->
+    Handler = list_to_atom("mtm_" ++ atom_to_list(Tab)),
+    case whereis(Handler) of
+	undefined ->
+	    supervisor:start_child(mnesia_sup, {Handler, {?MODULE, start_dirty_ram_updater, [Handler]}, transient, 5000, worker, [?MODULE]}),
+	    do_update(Tid, ram_copies, [Op], ok);
+	Pid ->
+	    Pid ! {Tid, Op}
+    end,
+    do_dirty_ram_update(Tid, Ops);
+do_dirty_ram_update (_Tid, []) ->
+    ok.
+
+start_dirty_ram_updater (Handler) ->
+    Pid = spawn_link(?MODULE, dirty_ram_updater, [Handler]),
+    {ok, Pid}.
+
+dirty_ram_updater (Handler) ->
+    register(Handler, self()),
+    dirty_ram_updater_loop().
+
+dirty_ram_updater_loop () ->
+    receive
+	{Tid, Op} ->
+	    do_update(Tid, ram_copies, [Op], ok);
+	_ ->
+	    ignore
+    end,
+    dirty_ram_updater_loop().
 
 
 %% Process items in fifo order
