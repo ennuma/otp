@@ -18,7 +18,7 @@ TMP	  := /tmp/wa-install.$(TSTAMP)
 TMPDEST	  := $(TMP).dest
 
 host-install:
-	mkdir -p $(TMP)/$(ERTSBIN) $(TMP)/$(KERNEL)/src $(TMP)/$(KERNEL)/ebin
+	mkdir -p $(TMP)/$(ERTSBIN) $(TMP)/$(KERNEL)/{src,ebin} $(TMP)/$(MNESIA)/{src,ebin}
 	cp -p bin/$(TARGET)/beam.smp $(TMP)/$(ERTSBIN)/beam.smp.$(VER)
 	cp -p bin/$(TARGET)/erlexec $(TMP)/$(ERTSBIN)/erlexec.$(VER)
 	ln -sf beam.smp.$(VER) $(TMP)/$(ERTSBIN)/beam.smp
