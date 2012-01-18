@@ -483,10 +483,16 @@ do_async_dirty(Tid, Commit, _Tab) ->
     ?eval_debug_fun({?MODULE, async_dirty, post}, [{tid, Tid}]).
 
 do_dirty_ram_update (Tid, [{{Tab, _K}, _Obj, _OpType} = Op | Ops]) ->
-    Handler = list_to_atom("mtm_" ++ atom_to_list(Tab)),
+    Handler = list_to_atom("mnesia_tm_" ++ atom_to_list(Tab)),
     case whereis(Handler) of
 	undefined ->
-	    supervisor:start_child(mnesia_sup, {Handler, {?MODULE, start_dirty_ram_updater, [Handler]}, transient, 5000, worker, [?MODULE]}),
+	    case ?catch_val(Handler) of
+		{'EXIT', _} ->
+    		    mnesia_lib:set(Handler, ok),
+		    supervisor:start_child(mnesia_sup, {Handler, {?MODULE, start_dirty_ram_updater, [Handler]}, transient, 5000, worker, [?MODULE]});
+		_ ->
+		    ok
+	    end,
 	    do_update(Tid, ram_copies, [Op], ok);
 	Pid ->
 	    Pid ! {Tid, Op}
