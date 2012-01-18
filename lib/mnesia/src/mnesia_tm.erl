@@ -476,7 +476,7 @@ do_async_dirty(Tid, Commit, _Tab) when Commit#commit.schema_ops == [],
 				       Commit#commit.snmp == [] ->
     ?eval_debug_fun({?MODULE, async_dirty, pre}, [{tid, Tid}]),
     catch do_async_dirty_update(Tid, Commit),
-    ?eval_debug_fun({?MODULE, async_dirty, post}, [{tid, Tid}]).
+    ?eval_debug_fun({?MODULE, async_dirty, post}, [{tid, Tid}]);
 do_async_dirty(Tid, Commit, _Tab) ->
     ?eval_debug_fun({?MODULE, async_dirty, pre}, [{tid, Tid}]),
     catch do_dirty(Tid, Commit),
