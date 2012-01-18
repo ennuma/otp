@@ -25,8 +25,8 @@ host-install:
 	ln -sf erlexec.$(VER) $(TMP)/$(ERTSBIN)/erlexec
 	cp -p lib/kernel/src/inet_tcp_dist.erl $(TMP)/$(KERNEL)/src
 	cp -p lib/kernel/ebin/inet_tcp_dist.beam $(TMP)/$(KERNEL)/ebin
-	cp -p lib/mnesia/src/mnesia.erl $(TMP)/$(MNESIA)/src
-	cp -p lib/mnesia/ebin/mnesia.beam $(TMP)/$(MNESIA)/ebin
+	cp -p lib/mnesia/src/mnesia_tm.erl $(TMP)/$(MNESIA)/src
+	cp -p lib/mnesia/ebin/mnesia_tm.beam $(TMP)/$(MNESIA)/ebin
 	ssh -t $(H) mkdir -p $(TMP)
 	rsync -az $(TMP)/ $(H):$(TMPDEST)/
 	ssh -t $(H) sudo rsync -a --no-owner --no-group $(TMPDEST)/ $(ERL)/ && rm -rf $(TMPDEST)
