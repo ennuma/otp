@@ -7,27 +7,27 @@ IGNORE    := svn propget svn:ignore
 U         ?= whatsapp
 ROOT      ?= /home/$(U)
 
-TMP	  := /tmp/wa-erts-install
 ERL	  := /usr/local/lib/erlang
-BIN	  := $(ERL)/erts-5.8.4/bin
+ERTSBIN	  := erts-5.8.4/bin
+KERNEL	  := lib/kernel-2.14.4
+MNESIA	  := lib/mnesia-4.4.19
 VER	  := $(shell cat wa-version)
-ERL_TOP	  := `pwd`
 TARGET	  := x86_64-unknown-freebsd8.2
-
-host-prep:
-	ssh -t $(H) sudo ln $(BIN)/beam.smp $(BIN)/beam.smp.orig
-	ssh -t $(H) sudo ln $(BIN)/erlexec $(BIN)/erlexec.orig
+TSTAMP	  := $(shell date -j +%s)
+TMP	  := /tmp/wa-install.$(TSTAMP)
+TMPDEST	  := $(TMP).dest
 
 host-install:
-	ssh $(H) mkdir -p /tmp/wa-erts-install
-	scp -C bin/$(TARGET)/beam.smp bin/$(TARGET)/erlexec lib/kernel/ebin/inet_tcp_dist.beam lib/kernel/src/inet_tcp_dist.erl lib/mnesia/src/mnesia_tm.erl lib/mnesia/ebin/mnesia_tm.beam $(H):$(TMP)
-	ssh -t $(H) sudo cp $(TMP)/beam.smp $(BIN)/beam.smp.$(VER)
-	ssh -t $(H) sudo cp $(TMP)/erlexec $(BIN)/erlexec.$(VER)
-	ssh -t $(H) sudo cp $(TMP)/inet_tcp_dist.beam $(ERL)/lib/kernel-2.14.4/ebin
-	ssh -t $(H) sudo cp $(TMP)/inet_tcp_dist.erl $(ERL)/lib/kernel-2.14.4/src
-	ssh -t $(H) sudo cp $(TMP)/mnesia_tm.beam $(ERL)/lib/mnesia-4.4.19/ebin
-	ssh -t $(H) sudo cp $(TMP)/mnesia_tm.erl $(ERL)/lib/mneisa-4.4.19/src
-
-host-enable:
-	ssh -t $(H) sudo ln -sf $(BIN)/beam.smp.$(VER) $(BIN)/beam.smp
-	ssh -t $(H) sudo ln -sf $(BIN)/erlexec.$(VER) $(BIN)/erlexec
+	mkdir -p $(TMP)/$(ERTSBIN) $(TMP)/$(KERNEL)/src $(TMP)/$(KERNEL)/ebin
+	cp -p bin/$(TARGET)/beam.smp $(TMP)/$(ERTSBIN)/beam.smp.$(VER)
+	cp -p bin/$(TARGET)/erlexec $(TMP)/$(ERTSBIN)/erlexec.$(VER)
+	ln -sf beam.smp.$(VER) $(TMP)/$(ERTSBIN)/beam.smp
+	ln -sf erlexec.$(VER) $(TMP)/$(ERTSBIN)/erlexec
+	cp -p lib/kernel/src/inet_tcp_dist.erl $(TMP)/$(KERNEL)/src
+	cp -p lib/kernel/ebin/inet_tcp_dist.beam $(TMP)/$(KERNEL)/ebin
+	cp -p lib/mnesia/src/mnesia.erl $(TMP)/$(MNESIA)/src
+	cp -p lib/mnesia/ebin/mnesia.beam $(TMP)/$(MNESIA)/ebin
+	ssh -t $(H) mkdir -p $(TMP)
+	rsync -az $(TMP)/ $(H):$(TMPDEST)/
+	ssh -t $(H) sudo rsync -a --no-owner --no-group $(TMPDEST)/ $(ERL)/ && rm -rf $(TMPDEST)
+	rm -rf $(TMP)
