@@ -482,7 +482,7 @@ do_async_dirty(Tid, Commit, _Tab) ->
     catch do_dirty(Tid, Commit),
     ?eval_debug_fun({?MODULE, async_dirty, post}, [{tid, Tid}]).
 
-do_dirty_ram_update (Tid, [{{Tab, _K}, _Obj, _OpType} = Op | Ops] = OpList) ->
+do_dirty_ram_update (Tid, [{{Tab, _K}, _Obj, _OpType} = Op | Ops]) ->
     Handler = list_to_atom("mtm_" ++ atom_to_list(Tab)),
     case whereis(Handler) of
 	undefined ->
