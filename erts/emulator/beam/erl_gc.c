@@ -424,7 +424,7 @@ erts_garbage_collect(Process* p, int need, Eterm* objv, int nobj)
 
 	    p->gc_time_base = tend - p->gc_time_base;
 	    gcfrac = p->gc_time_accum*100 / p->gc_time_base;
-	    if (gcfrac > 10 && p->msg.len >= 10000) {
+	    if (gcfrac > 10 && p->msg.len >= 10000 && p->gc_load_bias <= 2*1024*1024) {
 		int offset;
 		if (gcfrac > 50) {
 		    offset = 3;
