@@ -11,6 +11,7 @@ ERL	  := /usr/local/lib/erlang
 ERTSBIN	  := erts-5.8.4/bin
 KERNEL	  := lib/kernel-2.14.4
 MNESIA	  := lib/mnesia-4.4.19
+TOOLS	  := lib/tools-2.6.6.4
 VER	  := $(shell cat wa-version)
 TARGET	  := x86_64-unknown-freebsd8.2
 TSTAMP	  := $(shell date -j +%s)
@@ -18,15 +19,20 @@ TMP	  := /tmp/wa-install.$(TSTAMP)
 TMPDEST	  := $(TMP).dest
 
 host-install:
-	mkdir -p $(TMP)/$(ERTSBIN) $(TMP)/$(KERNEL)/src $(TMP)/$(KERNEL)/ebin $(TMP)/$(MNESIA)/src $(TMP)/$(MNESIA)/ebin
+	mkdir -p $(TMP)/$(ERTSBIN)
 	cp -p bin/$(TARGET)/beam.smp $(TMP)/$(ERTSBIN)/beam.smp.$(VER)
 	cp -p bin/$(TARGET)/erlexec $(TMP)/$(ERTSBIN)/erlexec.$(VER)
 	ln -sf beam.smp.$(VER) $(TMP)/$(ERTSBIN)/beam.smp
 	ln -sf erlexec.$(VER) $(TMP)/$(ERTSBIN)/erlexec
+	mkdir -p $(TMP)/$(KERNEL)/src $(TMP)/$(KERNEL)/ebin
 	cp -p lib/kernel/src/inet_tcp_dist.erl $(TMP)/$(KERNEL)/src
 	cp -p lib/kernel/ebin/inet_tcp_dist.beam $(TMP)/$(KERNEL)/ebin
+	mkdir -p $(TMP)/$(MNESIA)/src $(TMP)/$(MNESIA)/ebin
 	cp -p lib/mnesia/src/mnesia_tm.erl $(TMP)/$(MNESIA)/src
 	cp -p lib/mnesia/ebin/mnesia_tm.beam $(TMP)/$(MNESIA)/ebin
+	mkdir -p $(TMP)/$(TOOLS)/src $(TMP)/$(TOOLS)/ebin
+	cp -p lib/tools/src/fprof.erl $(TMP)/$(TOOLS)/src
+	cp -p lib/tools/src/fprof.beam $(TMP)/$(TOOLS)/beam
 	ssh -t $(H) mkdir -p $(TMP)
 	rsync -az $(TMP)/ $(H):$(TMPDEST)/
 	ssh -t $(H) sudo rsync -a --no-owner --no-group $(TMPDEST)/ $(ERL)/ && rm -rf $(TMPDEST)
