@@ -1516,6 +1516,9 @@ case $erl_gethrvtime in
 	#include <string.h>
 	#include <stdio.h>
 	#include <time.h>
+	#if !defined(CLOCK_PROCESS_CPUTIME_ID) && defined(CLOCK_VIRTUAL)
+	#define CLOCK_PROCESS_CPUTIME_ID CLOCK_VIRTUAL
+	#endif
 	int main() {
 	    long long start, stop;
 	    int i;
