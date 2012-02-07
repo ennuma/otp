@@ -27,6 +27,8 @@ host-install:
 	mkdir -p $(TMP)/$(KERNEL)/src $(TMP)/$(KERNEL)/ebin
 	cp -p lib/kernel/src/inet_tcp_dist.erl $(TMP)/$(KERNEL)/src
 	cp -p lib/kernel/ebin/inet_tcp_dist.beam $(TMP)/$(KERNEL)/ebin
+	cp -p lib/kernel/src/pg2.erl $(TMP)/$(KERNEL)/src
+	cp -p lib/kernel/ebin/pg2.beam $(TMP)/$(KERNEL)/ebin
 	mkdir -p $(TMP)/$(MNESIA)/src $(TMP)/$(MNESIA)/ebin
 	cp -p lib/mnesia/src/mnesia_tm.erl $(TMP)/$(MNESIA)/src
 	cp -p lib/mnesia/ebin/mnesia_tm.beam $(TMP)/$(MNESIA)/ebin
