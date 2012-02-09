@@ -118,6 +118,7 @@ typedef struct {
 #define PREPEND_MESSAGE_PRIVQ(p, mp) do { \
     (mp)->next = (p)->msg.first; \
     (p)->msg.first = (mp); \
+    (p)->msg.len++; \
 } while(0)
 
 
