@@ -240,7 +240,7 @@ void erts_lcnt_init() {
 
     lcnt_lock();
 
-    erts_lcnt_rt_options = ERTS_LCNT_OPT_PROCLOCK;
+    erts_lcnt_rt_options = ERTS_LCNT_OPT_PROCLOCK | ERTS_LCNT_OPT_LOCATION;
     
     eltd = lcnt_thread_data_alloc();
 
@@ -489,9 +489,13 @@ void erts_lcnt_lock_post_x(erts_lcnt_lock_t *lock, char *file, unsigned int line
     ASSERT(eltd);
 
     /* if lock was in conflict, time it */
-	
-    stats = lcnt_get_lock_stats(lock, file, line);
     
+    if (erts_lcnt_rt_options & ERTS_LCNT_OPT_LOCATION) {
+	stats = lcnt_get_lock_stats(lock, file, line);
+    } else {
+	stats = &lock->stats[0];
+    }
+
     if (eltd->timer_set) {
 	lcnt_time(&timer);
 	
