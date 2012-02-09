@@ -21,6 +21,7 @@ TMPDEST	  := $(TMP).dest
 host-install:
 	mkdir -p $(TMP)/$(ERTSBIN)
 	cp -p bin/$(TARGET)/beam.smp $(TMP)/$(ERTSBIN)/beam.smp.$(VER)
+	cp -p bin/$(TARGET)/beam.lcnt.smp $(TMP)/$(ERTSBIN)/beam.lcnt.smp.$(VER)
 	cp -p bin/$(TARGET)/erlexec $(TMP)/$(ERTSBIN)/erlexec.$(VER)
 	ln -sf beam.smp.$(VER) $(TMP)/$(ERTSBIN)/beam.smp
 	ln -sf erlexec.$(VER) $(TMP)/$(ERTSBIN)/erlexec
