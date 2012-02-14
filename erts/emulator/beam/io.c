@@ -609,7 +609,11 @@ erts_open_driver(erts_driver_t* driver,	/* Pointer to driver. */
 	port->lock = erts_alloc(ERTS_ALC_T_PORT_LOCK,
 					      sizeof(erts_smp_mtx_t));
 	erts_smp_mtx_init_x(port->lock,
+#ifdef ERTS_ENABLE_LOCK_COUNT
 			    (erts_lcnt_rt_options & ERTS_LCNT_OPT_PORTLOCK) ? "port_lock" : NULL,
+#else
+			    "port_lock",
+#endif
 			    port->id);
 	xstatus |= ERTS_PORT_SFLG_PORT_SPECIFIC_LOCK;
     }
@@ -763,7 +767,11 @@ driver_create_port(ErlDrvPort creator_port_ix, /* Creating port */
 	port->lock = erts_alloc(ERTS_ALC_T_PORT_LOCK,
 					      sizeof(erts_smp_mtx_t));
 	erts_smp_mtx_init_locked_x(port->lock,
+#ifdef ERTS_ENABLE_LOCK_COUNT
 				   (erts_lcnt_rt_options & ERTS_LCNT_OPT_PORTLOCK) ? "port_lock" : NULL,
+#else
+				   "port_lock",
+#endif
 				   port_id);
 	xstatus |= ERTS_PORT_SFLG_PORT_SPECIFIC_LOCK;
     }
@@ -1289,7 +1297,11 @@ void init_io(void)
 	erts_port[i].lock = NULL;
 	erts_port[i].xports = NULL;
 	erts_smp_spinlock_init_x(&erts_port[i].state_lck,
+#ifdef ERTS_ENABLE_LOCK_COUNT
 				 (erts_lcnt_rt_options & ERTS_LCNT_OPT_PORTLOCK) ? "port_state" : NULL,
+#else
+				 "port_state",
+#endif
 				 0);
 #endif
 	erts_port[i].tracer_proc = NIL;
