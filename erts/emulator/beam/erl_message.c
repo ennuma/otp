@@ -491,11 +491,26 @@ erts_prepend_message(Process* receiver,
 {
 #ifdef ERTS_SMP
     ErlMessage* mp;
+    ErtsProcLocks need_locks;
 
     ERTS_SMP_LC_ASSERT(((ERTS_PROC_LOCK_MAIN|ERTS_PROC_LOCK_STATUS)
 			& erts_proc_lc_my_proc_locks(receiver)) == (ERTS_PROC_LOCK_MAIN|ERTS_PROC_LOCK_STATUS));
 
     mp = message_alloc();
+
+    need_locks = ~(*receiver_locks) & (ERTS_PROC_LOCK_STATUS
+				       | ERTS_PROC_LOCK_MAIN);
+    if (need_locks) {
+	*receiver_locks |= need_locks;
+	if (erts_smp_proc_trylock(receiver, need_locks) == EBUSY) {
+	    if (need_locks == ERTS_PROC_LOCK_MAIN) {
+		erts_smp_proc_unlock(receiver, ERTS_PROC_LOCK_STATUS);
+		need_locks = (ERTS_PROC_LOCK_MAIN
+			      | ERTS_PROC_LOCK_STATUS);
+	    }
+	    erts_smp_proc_lock(receiver, need_locks);
+	}
+    }
 
     if (receiver->is_exiting || ERTS_PROC_PENDING_EXIT(receiver)) {
 	/* Drop message if receiver is exiting or has a pending
