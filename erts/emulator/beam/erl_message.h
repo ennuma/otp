@@ -117,6 +117,9 @@ typedef struct {
 /* Add message first in private message queue */
 #define PREPEND_MESSAGE_PRIVQ(p, mp) do { \
     (mp)->next = (p)->msg.first; \
+    if ((p)->msg.first == NULL) { \
+	(p)->msg.last = &(mp)->next; \
+    } \
     (p)->msg.first = (mp); \
     (p)->msg.len++; \
 } while(0)
