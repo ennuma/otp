@@ -4194,6 +4194,30 @@ BIF_RETTYPE system_flag_2(BIF_ALIST_2)
 	    "scheduled for removal in erts-5.10/OTP-R16. For more\n"
 	    "information see the erlang:system_flag/2 documentation.\n");
 	return erts_bind_schedulers(BIF_P, BIF_ARG_2);
+    } else if (ERTS_IS_ATOM_STR("scheduler_spin_until_yield", BIF_ARG_1)) {
+        erts_aint32_t old;
+	if (!is_small(BIF_ARG_2))
+	    goto error;
+        old = erts_sched_set_spincount(ERTS_SET_SCHED_SPIN_UNTIL_YIELD,unsigned_val(BIF_ARG_2));
+	BIF_RET(make_small(old));
+    } else if (ERTS_IS_ATOM_STR("scheduler_tse_spincount", BIF_ARG_1)) {
+        erts_aint32_t old;
+	if (!is_small(BIF_ARG_2))
+	    goto error;
+        old = erts_sched_set_spincount(ERTS_SET_SCHED_TSE_SPINCOUNT,unsigned_val(BIF_ARG_2));
+	BIF_RET(make_small(old));
+    } else if (ERTS_IS_ATOM_STR("scheduler_sys_spincount", BIF_ARG_1)) {
+        erts_aint32_t old;
+	if (!is_small(BIF_ARG_2))
+	    goto error;
+        old = erts_sched_set_spincount(ERTS_SET_SCHED_SYS_SPINCOUNT,unsigned_val(BIF_ARG_2));
+	BIF_RET(make_small(old));
+    } else if (ERTS_IS_ATOM_STR("scheduler_suspend_spincount", BIF_ARG_1)) {
+        erts_aint32_t old;
+	if (!is_small(BIF_ARG_2))
+	    goto error;
+        old = erts_sched_set_spincount(ERTS_SET_SCHED_SUSPEND_SPINCOUNT,unsigned_val(BIF_ARG_2));
+	BIF_RET(make_small(old));
     }
     error:
     BIF_ERROR(BIF_P, BADARG);
