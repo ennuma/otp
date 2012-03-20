@@ -1816,12 +1816,12 @@ scheduler_wait(int *fcalls, ErtsSchedulerData *esdp, ErtsRunQueue *rq)
 		flgs = sched_spin_wait(ssi, spincount);
 		if (flgs & ERTS_SSI_FLG_SLEEPING) {
 		    ASSERT(flgs & ERTS_SSI_FLG_WAITING);
-		    rq->sleeps++;
 		    flgs = sched_set_sleeptype(ssi, ERTS_SSI_FLG_TSE_SLEEPING);
 		    if (flgs & ERTS_SSI_FLG_SLEEPING) {
 			int res;
 			ASSERT(flgs & ERTS_SSI_FLG_TSE_SLEEPING);
 			ASSERT(flgs & ERTS_SSI_FLG_WAITING);
+			rq->sleeps++;
 			do {
 			    res = erts_tse_wait(ssi->event);
 			} while (res == EINTR);
@@ -6171,7 +6171,7 @@ Process *schedule(Process *p, int calls)
 	    }
 
 #endif
-
+	    rq->sys_clock_count += erts_get_sched_clock() - base_clock;
 	    scheduler_wait(&fcalls, esdp, rq);
 	    base_clock = erts_get_sched_clock();
 
