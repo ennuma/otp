@@ -1801,7 +1801,7 @@ ebif_bang_2(BIF_ALIST_2)
 #define SEND_USER_ERROR		(-5)
 #define SEND_INTERNAL_ERROR	(-6)
 
-Sint do_send(Process *p, Eterm to, Eterm msg, int suspend);
+Sint do_send(Process *p, Eterm to, Eterm msg, int suspend, int prepend);
 
 static Sint remote_send(Process *p, DistEntry *dep,
 			Eterm to, Eterm full_to, Eterm msg, int suspend)
@@ -1855,7 +1855,7 @@ static Sint remote_send(Process *p, DistEntry *dep,
 }
 
 Sint
-do_send(Process *p, Eterm to, Eterm msg, int suspend) {
+do_send(Process *p, Eterm to, Eterm msg, int suspend, int prepend) {
     Eterm portid;
     Port *pt;
     Process* rp;
@@ -1873,7 +1873,9 @@ do_send(Process *p, Eterm to, Eterm msg, int suspend) {
 	    return SEND_BADARG;
 
 	rp = erts_pid2proc_opt(p, ERTS_PROC_LOCK_MAIN,
-			       to, 0, ERTS_P2P_FLG_SMP_INC_REFC);
+			       to,
+			       prepend ? (ERTS_PROC_LOCK_MAIN|ERTS_PROC_LOCK_STATUS) : 0,
+			       ERTS_P2P_FLG_SMP_INC_REFC);
 	
 	if (!rp) {
 	    ERTS_SMP_ASSERT_IS_NOT_EXITING(p);
@@ -2100,9 +2102,11 @@ do_send(Process *p, Eterm to, Eterm msg, int suspend) {
 #ifdef ERTS_SMP
 	if (p == rp)
 	    rp_locks |= ERTS_PROC_LOCK_MAIN;
+	if (prepend)
+	    rp_locks |= (ERTS_PROC_LOCK_MAIN|ERTS_PROC_LOCK_STATUS);
 #endif
 	/* send to local process */
-	erts_send_message(p, rp, &rp_locks, msg, 0);
+	erts_send_message(p, rp, &rp_locks, msg, prepend ? ERTS_SND_FLG_PREPEND : 0);
 	if (!erts_use_sender_punish)
 	    res = 0;
 	else {
@@ -2133,6 +2137,7 @@ BIF_RETTYPE send_3(BIF_ALIST_3)
 
     int connect = !0;
     int suspend = !0;
+    int prepend = 0;
     Eterm l = opts;
     Sint result;
     
@@ -2141,6 +2146,8 @@ BIF_RETTYPE send_3(BIF_ALIST_3)
 	    connect = 0;
 	} else if (CAR(list_val(l)) == am_nosuspend) {
 	    suspend = 0;
+	} else if (CAR(list_val(l)) == am_prepend && is_internal_pid(to)) {
+	    prepend = 1;
 	} else {
 	    BIF_ERROR(p, BADARG);
 	}
@@ -2150,7 +2157,7 @@ BIF_RETTYPE send_3(BIF_ALIST_3)
 	BIF_ERROR(p, BADARG);
     }
     
-    result = do_send(p, to, msg, suspend);
+    result = do_send(p, to, msg, suspend, prepend);
     if (result > 0) {
 	ERTS_VBUMP_REDS(p, result);
 	BIF_RET(am_ok);
@@ -2201,7 +2208,7 @@ BIF_RETTYPE send_2(BIF_ALIST_2)
 
 Eterm erl_send(Process *p, Eterm to, Eterm msg)
 {
-    Sint result = do_send(p, to, msg, !0);
+    Sint result = do_send(p, to, msg, !0, 0);
     
     if (result > 0) {
 	ERTS_VBUMP_REDS(p, result);
