@@ -1646,6 +1646,7 @@ void profile_runnable_port(Port* p, Eterm status);
 void erts_system_profile_setup_active_schedulers(void);
 
 /* system_monitor */
+void monitor_gc_throttle(Process *p);
 void monitor_long_gc(Process *p, Uint time);
 void monitor_large_heap(Process *p);
 void monitor_generic(Process *p, Eterm type, Eterm spec);
