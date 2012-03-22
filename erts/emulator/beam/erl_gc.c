@@ -374,9 +374,9 @@ erts_garbage_collect(Process* p, int need, Eterm* objv, int nobj)
     erts_smp_proc_lock(p, ERTS_PROC_LOCK_STATUS);
     p->gcstatus = p->status;
     p->status = P_GARBING;
-    tstart = get_usec();
-
     erts_smp_proc_unlock(p, ERTS_PROC_LOCK_STATUS);
+
+    tstart = get_usec();
 
     ERTS_CHK_OFFHEAP(p);
 
@@ -415,7 +415,7 @@ erts_garbage_collect(Process* p, int need, Eterm* objv, int nobj)
 	while (0 != erts_milli_sleep(erts_test_long_gc_sleep));
 
     tend = get_usec();
-    t = tend - tstart;
+    t = (tend > tstart) ? tend - tstart : 0;
     p->gc_time_accum += t;
     p->gc_count++;
 
