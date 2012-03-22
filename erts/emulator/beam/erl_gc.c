@@ -447,8 +447,9 @@ erts_garbage_collect(Process* p, int need, Eterm* objv, int nobj)
     }
 
     if (erts_system_monitor_long_gc != 0) {
-	if (t > 0 && (Uint)t/1000 > erts_system_monitor_long_gc) {
-	    monitor_long_gc(p, t/1000);
+	Uint tms = (Uint)(t / 1000);
+	if (tms > erts_system_monitor_long_gc) {
+	    monitor_long_gc(p, tms);
 	}
     }
     if (erts_system_monitor_large_heap != 0) {
