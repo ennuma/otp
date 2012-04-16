@@ -2647,7 +2647,7 @@ check_possible_steal_victim(ErtsRunQueue *rq, int *rq_lockedp, int vix)
 static int
 try_steal_task(ErtsRunQueue *rq)
 {
-    int res, rq_locked, vix, active_rqs, blnc_rqs;
+    int res, rq_locked, vix, active_rqs, blnc_rqs, incr, add;
 
     /*
      * We are not allowed to steal jobs to this run queue
@@ -2687,18 +2687,18 @@ try_steal_task(ErtsRunQueue *rq)
 	}
 
 	vix = rq->ix;
+	incr = (active_rqs < 4) ? 1 : (active_rqs / 4);
+	add = incr;
 
 	/* ... then try to steal a job from another active queue... */
-	while (erts_smp_atomic32_read_acqb(&no_empty_run_queues) < blnc_rqs) {
-	    vix++;
-	    if (vix >= active_rqs)
-		vix = 0;
-	    if (vix == rq->ix)
-		break;
+	while (add < active_rqs && erts_smp_atomic32_read_acqb(&no_empty_run_queues) < blnc_rqs) {
+	    vix = (rq->ix + add) % active_rqs;
 
 	    res = check_possible_steal_victim(rq, &rq_locked, vix);
 	    if (res)
 		goto done;
+
+	    add += incr;
 	}
 
     }
