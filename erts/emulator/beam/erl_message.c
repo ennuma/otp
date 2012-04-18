@@ -1216,7 +1216,7 @@ erts_send_message(Process* sender,
 			   	 );
 	    
 	} else {
-	    erts_queue_message(receiver, receiver_locks, bp, message, token);
+	    erts_queue_message(receiver, receiver_locks, bp, message, token
 #ifdef USE_VM_PROBES
 			       , NIL
 #endif
