@@ -1582,7 +1582,7 @@ type(erlang, system_info, 1, Xs) ->
 		   ['dist'] ->
 		     t_binary();
 		   ['dist_ctrl'] ->
-		     t_list(t_tuple([t_atom(), t_sup([t_pid(), t_port])]));
+		     t_list(t_tuple([t_atom(), t_sup([t_pid(), t_port()])]));
                    ['driver_version'] ->
                      t_string();
 		   %% elib_malloc is intentionally not included,

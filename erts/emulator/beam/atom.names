@@ -221,6 +221,7 @@ atom first
 atom firstline
 atom flags
 atom flush
+atom flush_message_queue
 atom flush_monitor_message
 atom force
 atom format_cpu_topology
@@ -235,6 +236,7 @@ atom garbage_collecting
 atom garbage_collection
 atom gc_end
 atom gc_start
+atom gc_throttle
 atom Ge='>='
 atom generational
 atom get_seq_token
@@ -318,6 +320,7 @@ atom memory_types
 atom message
 atom message_binary
 atom message_queue_len
+atom message_queue_stats
 atom messages
 atom meta
 atom meta_match_spec
@@ -419,6 +422,7 @@ atom pid
 atom port
 atom ports
 atom port_count
+atom prepend
 atom print
 atom priority
 atom private

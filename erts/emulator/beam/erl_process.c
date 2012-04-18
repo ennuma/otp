@@ -44,19 +44,40 @@
 #include "erl_async.h"
 #include "dtrace-wrapper.h"
 
+#include "machine/cpufunc.h"
+
+static ERTS_INLINE Uint64
+erts_get_sched_clock (void)
+{
+  return rdtsc();
+}
+
 #define ERTS_RUNQ_CHECK_BALANCE_REDS_PER_SCHED (2000*CONTEXT_REDS)
 #define ERTS_RUNQ_CALL_CHECK_BALANCE_REDS \
   (ERTS_RUNQ_CHECK_BALANCE_REDS_PER_SCHED/2)
 
 #define ERTS_PROC_MIN_CONTEXT_SWITCH_REDS_COST (CONTEXT_REDS/10)
 
-#define ERTS_SCHED_SPIN_UNTIL_YIELD 100
+#define ERTS_SCHED_SPIN_UNTIL_YIELD_INIT 100
+erts_smp_atomic32_t erts_sched_spin_until_yield = {ERTS_SCHED_SPIN_UNTIL_YIELD_INIT};
+#define ERTS_SCHED_SPIN_UNTIL_YIELD erts_smp_atomic32_read_nob(&erts_sched_spin_until_yield)
 
-#define ERTS_SCHED_SYS_SLEEP_SPINCOUNT 10
-#define ERTS_SCHED_TSE_SLEEP_SPINCOUNT_FACT 1000
-#define ERTS_SCHED_TSE_SLEEP_SPINCOUNT \
-  (ERTS_SCHED_SYS_SLEEP_SPINCOUNT*ERTS_SCHED_TSE_SLEEP_SPINCOUNT_FACT)
-#define ERTS_SCHED_SUSPEND_SLEEP_SPINCOUNT 0
+#define ERTS_SCHED_SYS_SLEEP_SPINCOUNT_INIT 10
+erts_smp_atomic32_t erts_sched_sys_sleep_spincount = {ERTS_SCHED_SYS_SLEEP_SPINCOUNT_INIT};
+#define ERTS_SCHED_SYS_SLEEP_SPINCOUNT erts_smp_atomic32_read_nob(&erts_sched_sys_sleep_spincount)
+
+#define ERTS_SCHED_TSE_SLEEP_SPINCOUNT_FACT_INIT 1000
+erts_smp_atomic32_t erts_sched_tse_sleep_spincount_fact = {ERTS_SCHED_TSE_SLEEP_SPINCOUNT_FACT_INIT};
+#define ERTS_SCHED_TSE_SLEEP_SPINCOUNT_FACT erts_smp_atomic32_read_nob(&erts_sched_tse_sleep_spincount_fact)
+
+#define ERTS_SCHED_TSE_SLEEP_SPINCOUNT_INIT \
+  (ERTS_SCHED_SYS_SLEEP_SPINCOUNT_INIT*ERTS_SCHED_TSE_SLEEP_SPINCOUNT_FACT_INIT)
+erts_smp_atomic32_t erts_sched_tse_sleep_spincount = {ERTS_SCHED_TSE_SLEEP_SPINCOUNT_INIT};
+#define ERTS_SCHED_TSE_SLEEP_SPINCOUNT erts_smp_atomic32_read_nob(&erts_sched_tse_sleep_spincount)
+
+#define ERTS_SCHED_SUSPEND_SLEEP_SPINCOUNT_INIT 0
+erts_smp_atomic32_t erts_sched_suspend_sleep_spincount = {ERTS_SCHED_SUSPEND_SLEEP_SPINCOUNT_INIT};
+#define ERTS_SCHED_SUSPEND_SLEEP_SPINCOUNT erts_smp_atomic32_read_nob(&erts_sched_suspend_sleep_spincount)
 
 #define ERTS_WAKEUP_OTHER_LIMIT_VERY_HIGH (200*CONTEXT_REDS)
 #define ERTS_WAKEUP_OTHER_LIMIT_HIGH (50*CONTEXT_REDS)
@@ -126,6 +147,7 @@ Uint erts_process_tab_index_mask;
 static int wakeup_other_limit;
 
 int erts_sched_thread_suggested_stack_size = -1;
+erts_smp_atomic32_t erts_sched_context_reds = {ERTS_DEFAULT_CONTEXT_REDS};
 
 #ifdef ERTS_ENABLE_LOCK_CHECK
 ErtsLcPSDLocks erts_psd_required_locks[ERTS_PSD_SIZE];
@@ -390,6 +412,40 @@ dbg_chk_aux_work_val(erts_aint32_t value)
 static void handle_pending_exiters(ErtsProcList *);
 
 #endif
+
+
+erts_aint32_t
+erts_sched_set_spincount (Uint which, erts_aint32_t count)
+{
+    erts_aint32_t ret;
+    erts_aint32_t fact;
+
+    switch (which) {
+    case ERTS_SET_SCHED_SPIN_UNTIL_YIELD:
+	ret = erts_smp_atomic32_xchg_nob(&erts_sched_spin_until_yield,count);
+        break;
+
+    case ERTS_SET_SCHED_TSE_SPINCOUNT:
+	ret = erts_smp_atomic32_xchg_nob(&erts_sched_tse_sleep_spincount,count);
+	break;
+
+    case ERTS_SET_SCHED_SYS_SPINCOUNT:
+	ret = erts_smp_atomic32_xchg_nob(&erts_sched_sys_sleep_spincount,count);
+	break;
+
+    case ERTS_SET_SCHED_SUSPEND_SPINCOUNT:
+	ret = erts_smp_atomic32_xchg_nob(&erts_sched_suspend_sleep_spincount,count);
+	break;
+
+    default:
+	ret = -1;
+    }
+    
+    fact = ERTS_SCHED_TSE_SLEEP_SPINCOUNT / ERTS_SCHED_SYS_SLEEP_SPINCOUNT;
+    erts_smp_atomic32_xchg_nob(&erts_sched_tse_sleep_spincount_fact,fact);
+    return ret;
+}
+
 
 #if defined(ERTS_SMP) && defined(ERTS_ENABLE_LOCK_CHECK)
 int
@@ -2035,6 +2091,8 @@ scheduler_wait(int *fcalls, ErtsSchedulerData *esdp, ErtsRunQueue *rq)
 	return;
     }
 
+    rq->waits++;
+
     /*
      * If all schedulers are waiting, one of them *should*
      * be waiting in erl_sys_schedule()
@@ -2083,6 +2141,7 @@ scheduler_wait(int *fcalls, ErtsSchedulerData *esdp, ErtsRunQueue *rq)
 			int res;
 			ASSERT(flgs & ERTS_SSI_FLG_TSE_SLEEPING);
 			ASSERT(flgs & ERTS_SSI_FLG_WAITING);
+			rq->sleeps++;
 			do {
 			    res = erts_tse_wait(ssi->event);
 			} while (res == EINTR);
@@ -2929,7 +2988,7 @@ check_possible_steal_victim(ErtsRunQueue *rq, int *rq_lockedp, int vix)
 static int
 try_steal_task(ErtsRunQueue *rq)
 {
-    int res, rq_locked, vix, active_rqs, blnc_rqs;
+    int res, rq_locked, vix, active_rqs, blnc_rqs, incr, add;
 
     /*
      * We are not allowed to steal jobs to this run queue
@@ -2969,18 +3028,18 @@ try_steal_task(ErtsRunQueue *rq)
 	}
 
 	vix = rq->ix;
+	incr = (active_rqs < 4) ? 1 : (active_rqs / 4);
+	add = incr;
 
 	/* ... then try to steal a job from another active queue... */
-	while (erts_smp_atomic32_read_acqb(&no_empty_run_queues) < blnc_rqs) {
-	    vix++;
-	    if (vix >= active_rqs)
-		vix = 0;
-	    if (vix == rq->ix)
-		break;
+	while (add < active_rqs && erts_smp_atomic32_read_acqb(&no_empty_run_queues) < blnc_rqs) {
+	    vix = (rq->ix + add) % active_rqs;
 
 	    res = check_possible_steal_victim(rq, &rq_locked, vix);
 	    if (res)
 		goto done;
+
+	    add += incr;
 	}
 
     }
@@ -3659,6 +3718,16 @@ erts_init_scheduling(int no_schedulers, int no_schedulers_online)
 	rq->wakeup_other = 0;
 	rq->wakeup_other_reds = 0;
 	rq->halt_in_progress = 0;
+
+	rq->waits = 0;
+	rq->sleeps = 0;
+	rq->runqlen_sum = 0;
+	rq->runqlen_samples = 0;
+	rq->init_clock = erts_get_sched_clock();
+	rq->proc_schedule_clock = 0;
+	rq->proc_clock_count = 0;
+	rq->port_clock_count = 0;
+	rq->sys_clock_count = 0;
 
 	rq->procs.len = 0;
 	rq->procs.pending_exiters = NULL;
@@ -6218,6 +6287,9 @@ Process *schedule(Process *p, int calls)
     int input_reductions;
     int actual_reds;
     int reds;
+    Uint64 base_clock;
+
+    base_clock = erts_get_sched_clock();
 
 #ifdef USE_VM_PROBES
     if (p != NULL && DTRACE_ENABLED(process_unscheduled)) {
@@ -6268,6 +6340,7 @@ Process *schedule(Process *p, int calls)
 	ASSERT(esdp && esdp == erts_get_scheduler_data());
 
 	rq = erts_get_runq_current(esdp);
+	rq->proc_clock_count += base_clock - rq->proc_schedule_clock;
 
 	p->reds += actual_reds;
 
@@ -6397,7 +6470,9 @@ Process *schedule(Process *p, int calls)
 	    if (rq->flags & ERTS_RUNQ_FLG_SUSPENDED) {
 		ASSERT(erts_smp_atomic32_read_nob(&esdp->ssi->flags)
 		       & ERTS_SSI_FLG_SUSPENDED);
+		rq->sys_clock_count = erts_get_sched_clock() - base_clock;
 		suspend_scheduler(esdp);
+		base_clock = erts_get_sched_clock();
 	    }
 	    if (rq->flags & ERTS_RUNQ_FLG_CHK_CPU_BIND)
 		erts_sched_check_cpu_bind(esdp);
@@ -6431,9 +6506,16 @@ Process *schedule(Process *p, int calls)
 
 	ASSERT(rq->len == rq->procs.len + rq->ports.info.len);
 
+<<<<<<< HEAD
 	if ((rq->len == 0 && !rq->misc.start)
 	    || (rq->halt_in_progress
 		&& rq->ports.info.len == 0 && !rq->misc.start)) {
+=======
+	rq->runqlen_sum += rq->len;
+	rq->runqlen_samples++;
+
+	if (rq->len == 0 && !rq->misc.start) {
+>>>>>>> wa_r15
 
 #ifdef ERTS_SMP
 
@@ -6463,8 +6545,9 @@ Process *schedule(Process *p, int calls)
 	    }
 
 #endif
-
+	    rq->sys_clock_count += erts_get_sched_clock() - base_clock;
 	    scheduler_wait(&fcalls, esdp, rq);
+	    base_clock = erts_get_sched_clock();
 
 #ifdef ERTS_SMP
 	    non_empty_runq(rq);
@@ -6530,9 +6613,17 @@ Process *schedule(Process *p, int calls)
 
 	if (rq->ports.info.len) {
 	    int have_outstanding_io;
+	    Uint64 port_clock = erts_get_sched_clock();
+	    rq->sys_clock_count += port_clock - base_clock;
 	    have_outstanding_io = erts_port_task_execute(rq, &esdp->current_port);
+<<<<<<< HEAD
 	    if ((have_outstanding_io && fcalls > 2*input_reductions)
 		|| rq->halt_in_progress) {
+=======
+	    base_clock = erts_get_sched_clock();
+	    rq->port_clock_count += base_clock - port_clock;
+	    if (have_outstanding_io && fcalls > 2*input_reductions) {
+>>>>>>> wa_r15
 		/*
 		 * If we have performed more than 2*INPUT_REDUCTIONS since
 		 * last call to erl_sys_schedule() and we still haven't
@@ -6728,6 +6819,8 @@ Process *schedule(Process *p, int calls)
 	p->fcalls = reds;
 	ASSERT(IS_ACTIVE(p));
 	ERTS_SMP_CHK_HAVE_ONLY_MAIN_PROC_LOCK(p);
+	rq->proc_schedule_clock = erts_get_sched_clock();
+	rq->sys_clock_count += rq->proc_schedule_clock - base_clock;
 	return p;
     }
 }
@@ -6875,6 +6968,58 @@ erts_get_total_context_switches(void)
     Uint res = 0;
     ERTS_ATOMIC_FOREACH_RUNQ(rq, res += rq->procs.context_switches);
     return res;
+}
+
+Uint
+erts_get_total_scheduler_waits(void)
+{
+    Uint res = 0;
+    ERTS_ATOMIC_FOREACH_RUNQ(rq, res += rq->waits);
+    return res;
+}
+
+Uint
+erts_get_total_scheduler_sleeps(void)
+{
+    Uint res = 0;
+    ERTS_ATOMIC_FOREACH_RUNQ(rq, res += rq->sleeps);
+    return res;
+}
+
+void
+erts_get_run_queues_counts (Uint64 *sum, Uint64 *samples)
+{
+    Uint64 asum = 0;
+    Uint64 asamples = 0;
+
+    ERTS_ATOMIC_FOREACH_RUNQ(rq,
+			     {
+			       asum += rq->runqlen_sum;
+			       asamples += rq->runqlen_samples;
+			     });
+    *sum = asum;
+    *samples = asamples;
+}
+
+void
+erts_get_total_scheduler_times(Uint64 *total, Uint64 *proc, Uint64 *sys, Uint64 *port)
+{
+    Uint64 t = 0;
+    Uint64 p = 0;
+    Uint64 s = 0;
+    Uint64 r = 0;
+    Uint64 now = erts_get_sched_clock();
+    ERTS_ATOMIC_FOREACH_RUNQ(rq,
+			     {
+			       t += now - rq->init_clock;
+			       p += rq->proc_clock_count;
+			       s += rq->sys_clock_count;
+			       r += rq->port_clock_count;
+			     });
+    *total = t;
+    *proc = p;
+    *sys = s;
+    *port = r;
 }
 
 void
@@ -7188,6 +7333,11 @@ erl_create_process(Process* parent, /* Parent of process (default group leader).
     p->bin_old_vheap    = 0;
     p->bin_vheap_mature = 0;
 
+    p->gc_time_base = 0;
+    p->gc_time_accum = 0;
+    p->gc_count = 0;
+    p->gc_load_bias = 0;
+
     /* No need to initialize p->fcalls. */
 
     p->current = p->initial+INITIAL_MOD;
@@ -7258,6 +7408,27 @@ erl_create_process(Process* parent, /* Parent of process (default group leader).
     p->msg_inq.len = 0;
     p->bound_runq = NULL;
 #endif
+    p->msg_enq.count = 0;
+    p->msg_enq.rate.count = 0;
+    p->msg_enq.rate.time = 0;
+    p->msg_enq.rate.sec1 = 0;
+    p->msg_enq.rate.sec10 = 0;
+    p->msg_enq.rate.sec100 = 0;
+    p->msg_enq.rate.sec1000 = 0;
+    p->msg_deq.count = 0;
+    p->msg_deq.rate.count = 0;
+    p->msg_deq.rate.time = 0;
+    p->msg_deq.rate.sec1 = 0;
+    p->msg_deq.rate.sec10 = 0;
+    p->msg_deq.rate.sec100 = 0;
+    p->msg_deq.rate.sec1000 = 0;
+    p->msg_send.count = 0;
+    p->msg_send.rate.count = 0;
+    p->msg_send.rate.time = 0;
+    p->msg_send.rate.sec1 = 0;
+    p->msg_send.rate.sec10 = 0;
+    p->msg_send.rate.sec100 = 0;
+    p->msg_send.rate.sec1000 = 0;
     p->bif_timers = NULL;
     p->mbuf = NULL;
     p->mbuf_sz = 0;
@@ -8837,6 +9008,60 @@ set_timer(Process* p, Uint timeout)
 		  timeout);
 #endif
 }
+
+
+/* Fast exp() approximation from Schraudolph '99 */
+
+#define EXP_A 1512775.395195
+#define EXP_C 60801
+
+static inline double
+fast_exp (double y)
+{
+  union {
+    double d;
+    struct {
+      int j, i;
+    } n;
+  } eco;
+  eco.n.j = 0;
+  eco.n.i = EXP_A*y + (1072693248 - EXP_C);
+  return eco.d;
+}
+
+static ERTS_INLINE void
+update_msg_rate (double* rate_accum, double rate, double dt, double interval)
+{
+    double decay = fast_exp(-dt/interval);
+    *rate_accum = *rate_accum*decay + rate*(1-decay);
+}
+
+void
+erts_update_msg_rate (ErlMessageCount* c)
+{
+    SysTimeval tv;
+    Uint64 t;
+    sys_gettimeofday(&tv);
+    t = (Uint64)tv.tv_sec*1000000 + tv.tv_usec;
+    if (c->rate.time) {
+	Uint64 tdiff = t - c->rate.time;
+	if (tdiff >= ERTS_MSG_RATE_UPDATE_INTERVAL) {
+	    double dt = (double)tdiff / 1000000.;
+	    double rate = (double)(c->count - c->rate.count) / dt;
+	    update_msg_rate(&c->rate.sec1, rate, dt, 1.);
+	    update_msg_rate(&c->rate.sec10, rate, dt, 10.);
+	    update_msg_rate(&c->rate.sec100, rate, dt, 100.);
+	    update_msg_rate(&c->rate.sec1000, rate, dt, 1000.);
+	    c->rate.time = t;
+	    c->rate.count = c->count;
+	}
+    } else {
+	c->rate.time = t;
+	c->rate.count = c->count;
+    }
+}
+
+
 
 /*
  * Stack dump functions follow.
