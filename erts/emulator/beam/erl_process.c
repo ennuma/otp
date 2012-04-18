@@ -6506,16 +6506,11 @@ Process *schedule(Process *p, int calls)
 
 	ASSERT(rq->len == rq->procs.len + rq->ports.info.len);
 
-<<<<<<< HEAD
+	rq->runqlen_sum += rq->len;
+	rq->runqlen_samples++;
 	if ((rq->len == 0 && !rq->misc.start)
 	    || (rq->halt_in_progress
 		&& rq->ports.info.len == 0 && !rq->misc.start)) {
-=======
-	rq->runqlen_sum += rq->len;
-	rq->runqlen_samples++;
-
-	if (rq->len == 0 && !rq->misc.start) {
->>>>>>> wa_r15
 
 #ifdef ERTS_SMP
 
@@ -6616,14 +6611,10 @@ Process *schedule(Process *p, int calls)
 	    Uint64 port_clock = erts_get_sched_clock();
 	    rq->sys_clock_count += port_clock - base_clock;
 	    have_outstanding_io = erts_port_task_execute(rq, &esdp->current_port);
-<<<<<<< HEAD
-	    if ((have_outstanding_io && fcalls > 2*input_reductions)
-		|| rq->halt_in_progress) {
-=======
 	    base_clock = erts_get_sched_clock();
 	    rq->port_clock_count += base_clock - port_clock;
-	    if (have_outstanding_io && fcalls > 2*input_reductions) {
->>>>>>> wa_r15
+	    if ((have_outstanding_io && fcalls > 2*input_reductions)
+		|| rq->halt_in_progress) {
 		/*
 		 * If we have performed more than 2*INPUT_REDUCTIONS since
 		 * last call to erl_sys_schedule() and we still haven't
