@@ -12,6 +12,7 @@ ERTSBIN	  := erts-5.8.4/bin
 KERNEL	  := lib/kernel-2.14.4
 MNESIA	  := lib/mnesia-4.4.19
 TOOLS	  := lib/tools-2.6.6.4
+INETS	  := lib/inets-5.6
 VER	  := $(shell cat wa-version)
 TARGET	  := $(shell erts/autoconf/config.guess)
 TSTAMP	  := $(shell date -j +%s)
