@@ -39,8 +39,9 @@ host-install:
 	mkdir -p $(TMP)/$(TOOLS)/src $(TMP)/$(TOOLS)/ebin
 	cp -p lib/tools/src/fprof.erl $(TMP)/$(TOOLS)/src
 	cp -p lib/tools/ebin/fprof.beam $(TMP)/$(TOOLS)/ebin
+	mkdir -p $(TMP)/$(INETS)/src $(TMP)/$(INETS)/ebin
 	cp -p lib/inets/src/http_lib/http_transport.erl $(TMP)/$(INETS)/src
-	cp -p lib/inets/ebin/http_lib/http_transport.erl $(TMP)/$(INETS)/ebin
+	cp -p lib/inets/ebin/http_transport.beam $(TMP)/$(INETS)/ebin
 	ssh -t $(H) mkdir -p $(TMP)
 	rsync -az $(TMP)/ $(H):$(TMPDEST)/
 	ssh -t $(H) sudo rsync -a --no-owner --no-group $(TMPDEST)/ $(ERL)/ && rm -rf $(TMPDEST)
