@@ -883,7 +883,7 @@ efile_fileinfo(Efile_error* errInfo, Efile_info* pInfo,
 #if defined(HAVE_LOCALTIME_R) || defined(VXWORKS)
     {
 	/* Use the reentrant version of localtime() */
-	static struct tm local_tm;
+	struct tm local_tm;
 #define localtime(a) (localtime_r((a), &local_tm), &local_tm)
 #endif
 
