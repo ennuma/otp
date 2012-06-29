@@ -51,6 +51,7 @@
 	]).
 
 -export([start_async_dirty_updater/1, async_dirty_updater/1, async_dirty_updater_loop/0]).
+-define(NUM_ASYNC_DIRTY_UPDATERS, 32).
 
 -include("mnesia.hrl").
 -import(mnesia_lib, [set/2]).
@@ -489,7 +490,7 @@ do_async_dirty_update (Tid, Commit) ->
     do_async_dirty_update_op(Tid, disc_only_copies, Commit#commit.disc_only_copies).
 
 do_async_dirty_update_op (Tid, Type, [{{Tab, _K}, _Obj, _OpType} = Op | Ops]) ->
-    Handler = list_to_atom("mnesia_tm_" ++ atom_to_list(Tab)),
+    Handler = list_to_atom("mnesia_tm_" ++ integer_to_list(erlang:phash2(Tab, ?NUM_ASYNC_DIRTY_UPDATERS) + 1)),
     case whereis(Handler) of
 	undefined ->
 	    case ?catch_val(Handler) of
