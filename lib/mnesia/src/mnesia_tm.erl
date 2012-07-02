@@ -490,7 +490,19 @@ do_async_dirty_update (Tid, Commit) ->
     do_async_dirty_update_op(Tid, disc_only_copies, Commit#commit.disc_only_copies).
 
 do_async_dirty_update_op (Tid, Type, [{{Tab, _K}, _Obj, _OpType} = Op | Ops]) ->
-    Handler = list_to_atom("mnesia_tm_" ++ integer_to_list(erlang:phash2(Tab, ?NUM_ASYNC_DIRTY_UPDATERS) + 1)),
+    TabName = atom_to_list(Tab),
+    Num = case string:rstr(TabName, "_frag") of
+	      0 ->
+		  1;
+	      N ->
+		  case string:to_integer(string:substr(TabName, N+5)) of
+		      {error, _Reason} ->
+			  1;
+		      {Frag, _} ->
+			  ((Frag-1) rem ?NUM_ASYNC_DIRTY_UPDATERS) + 1
+		  end
+	  end,
+    Handler = list_to_atom("mnesia_tm_" ++ integer_to_list(Num)),
     case whereis(Handler) of
 	undefined ->
 	    case ?catch_val(Handler) of
