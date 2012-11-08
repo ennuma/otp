@@ -62,14 +62,16 @@ struct ErtsBifTimer_ {
 };
 
 #ifdef SMALL_MEMORY
-#define TIMER_HASH_VEC_SZ	3331
+#define DEF_TIMER_HASH_VEC_SZ	3331
 #define BTM_PREALC_SZ		10
 #else
-#define TIMER_HASH_VEC_SZ	99991
+#define DEF_TIMER_HASH_VEC_SZ	99991
 #define BTM_PREALC_SZ		1000
 #endif
 static ErtsBifTimer **bif_timer_tab;  
 static Uint no_bif_timers;
+static Uint bif_timer_hash_vec_sz;
+#define TIMER_HASH_VEC_SZ bif_timer_hash_vec_sz
 
 
 static erts_smp_rwmtx_t bif_timer_lock;
@@ -657,6 +659,14 @@ erts_cancel_bif_timers(Process *p, ErtsProcLocks plocks)
 void erts_bif_timer_init(void)
 {
     int i;
+    char buf[21]; /* enough for any 64-bit integer */
+    size_t bufsize = sizeof(buf);
+
+    if (erts_sys_getenv("ERL_BIF_TIMER_HASH_SIZE", buf, &bufsize) == 0)
+	bif_timer_hash_vec_sz = atoi(buf);
+    else
+	bif_timer_hash_vec_sz = DEF_TIMER_HASH_VEC_SZ;
+
     no_bif_timers = 0;
     init_btm_pre_alloc();
     erts_smp_btm_lock_init();

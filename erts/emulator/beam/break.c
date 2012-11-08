@@ -243,9 +243,11 @@ print_process_info(int to, void *to_arg, Process *p)
 		   p->current[1],
 		   p->current[2]);
     }
+#ifdef ERTS_SMP
     if (p->run_queue != NULL) {
 	erts_print(to, to_arg, "Run queue: %d\n", p->run_queue->ix);
     }
+#endif
 
     erts_print(to, to_arg, "Spawned by: %T\n", p->parent);
     tmp_t = p->started.tv_sec;
