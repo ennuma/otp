@@ -371,9 +371,14 @@ insert_timer(ErlTimer* p, Uint t)
     p->count = tiw_count + (Uint) ((ticks + tiw_pos) / TIW_SIZE);
   
     /* insert in sorted order */
-    /* start from tail since new timers are more likely to be after existing timers */
-    next = NULL;
-    for (tp = tiw[tm].tail; tp && p->count < tp->count; next = tp, tp = tp->prev);
+    if (!tiw[tm].head || p->count <= tiw[tm].head->count) {
+	next = tiw[tm].head;
+	tp = NULL;
+    } else {
+	/* scan from tail since new timers are more likely to be after existing timers */
+	next = NULL;
+	for (tp = tiw[tm].tail; tp && p->count < tp->count; next = tp, tp = tp->prev);
+    }
     if (tp) {
 	p->next = tp->next;
 	tp->next = p;
