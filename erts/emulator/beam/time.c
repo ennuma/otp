@@ -456,6 +456,21 @@ erts_cancel_timer(ErlTimer* p)
     erts_smp_mtx_unlock(&tiw_lock);
 }
 
+void
+erts_reset_timer(ErlTimer* p, Uint t)
+{
+    erts_deliver_time();
+    erts_smp_mtx_lock(&tiw_lock);
+    remove_timer(p);
+    p->active = 1;
+    insert_timer(p, t);
+    erts_smp_mtx_unlock(&tiw_lock);
+#if defined(ERTS_SMP)
+    if (t <= (Uint) ERTS_SHORT_TIME_T_MAX)
+	erts_sys_schedule_interrupt_timed(1, (erts_short_time_t) t);
+#endif
+}
+
 /*
   Returns the amount of time left in ms until the timer 'p' is triggered.
   0 is returned if 'p' isn't active.

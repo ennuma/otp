@@ -69,12 +69,14 @@ void erts_create_smp_ptimer(ErtsSmpPTimer **timer_ref,
 			    ErlTimeoutProc timeout_func,
 			    Uint timeout);
 void erts_cancel_smp_ptimer(ErtsSmpPTimer *ptimer);
+void erts_reset_smp_ptimer(ErtsSmpPTimer *ptimer, Uint timeout);
 #endif
 
 /* timer-wheel api */
 
 void erts_init_time(void);
 void erts_set_timer(ErlTimer*, ErlTimeoutProc, ErlCancelProc, void*, Uint);
+void erts_reset_timer(ErlTimer*, Uint);
 void erts_cancel_timer(ErlTimer*);
 void erts_bump_timer(erts_short_time_t);
 Uint erts_timer_wheel_memory_size(void);

@@ -777,6 +777,7 @@ struct process {
 #endif
 	void *exit_data;	/* Misc data referred during termination */
     } u;
+    Uint64 tm_set;		/* usec timeofday when timer will expire */
 
     ErtsRunQueue *bound_runq;
 
@@ -994,6 +995,7 @@ extern struct erts_system_profile_flags_t erts_system_profile_flags;
 #define F_P2PNR_RESCHED      (1 <<  9) /* Process has been rescheduled via erts_pid2proc_not_running() */
 #define F_FORCE_GC           (1 << 10) /* Force gc at process in-scheduling */
 #define F_HIBERNATE_SCHED    (1 << 11) /* Schedule out after hibernate op */
+#define F_TIMER_ACTIVE	     (1 << 12)
 
 /* process trace_flags */
 #define F_SENSITIVE          (1 << 0)
@@ -1122,12 +1124,9 @@ extern struct erts_system_profile_flags_t erts_system_profile_flags;
 #define P_SUSPENDED 6
 
 #define CANCEL_TIMER(p) \
-    do { \
-	if ((p)->flags & (F_INSLPQUEUE)) \
-	    cancel_timer(p); \
-	else \
-	    (p)->flags &= ~F_TIMO; \
-    } while (0)
+    (p)->flags &= ~(F_INSLPQUEUE|F_TIMO)
+
+#define ERTS_PROC_MAX_TIMER_SLOP	(10000)
 
 #define ERTS_RUNQ_IX(IX)						\
   (ASSERT_EXPR(0 <= (IX) && (IX) < erts_no_run_queues),			\
