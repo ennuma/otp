@@ -3314,13 +3314,6 @@ erts_cancel_smp_ptimer(ErtsSmpPTimer *ptimer)
     }
 }
 
-void
-erts_reset_smp_ptimer(ErtsSmpPTimer *ptimer, Uint timeout)
-{
-    ASSERT(*ptimer->timer.timer_ref == ptimer);
-    erts_reset_timer(&ptimer->timer.tm, timeout);
-}
-
 #endif
 
 static int trim_threshold;

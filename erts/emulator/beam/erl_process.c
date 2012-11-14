@@ -8928,16 +8928,10 @@ continue_exit_process(Process *p
 static void
 timeout_proc(Process* p)
 {
-    BeamInstr** pi;
-
-    if ((p->flags & F_INSLPQUEUE) == 0) {
-	p->flags &= ~F_TIMER_ACTIVE;
-	return;
-    }
-    pi = (BeamInstr **) p->def_arg_reg;
+    BeamInstr** pi = (BeamInstr **) p->def_arg_reg;
     p->i = *pi;
     p->flags |= F_TIMO;
-    p->flags &= ~(F_INSLPQUEUE|F_TIMER_ACTIVE);
+    p->flags &= ~F_INSLPQUEUE;
 
     switch (p->status) {
     case P_GARBING:
@@ -8968,7 +8962,7 @@ void
 cancel_timer(Process* p)
 {
     ERTS_SMP_LC_ASSERT(ERTS_PROC_LOCK_MAIN & erts_proc_lc_my_proc_locks(p));
-    p->flags &= ~(F_INSLPQUEUE|F_TIMO|F_TIMER_ACTIVE);
+    p->flags &= ~(F_INSLPQUEUE|F_TIMO);
 #ifdef ERTS_SMP
     erts_cancel_smp_ptimer(p->u.ptimer);
 #else
@@ -8982,9 +8976,6 @@ cancel_timer(Process* p)
 void
 set_timer(Process* p, Uint timeout)
 {
-    SysTimeval now;
-    Uint64 tm_set;
-
     ERTS_SMP_LC_ASSERT(ERTS_PROC_LOCK_MAIN & erts_proc_lc_my_proc_locks(p));
 
     /* check for special case timeout=0 DONT ADD TO time queue */
@@ -8992,28 +8983,9 @@ set_timer(Process* p, Uint timeout)
 	p->flags |= F_TIMO;
 	return;
     }
-
-    erts_get_timeval(&now);
-    tm_set = (Uint64)now.tv_sec*1000000 + now.tv_usec + timeout*1000;
-
     p->flags |= F_INSLPQUEUE;
     p->flags &= ~F_TIMO;
 
-    if (p->flags & F_TIMER_ACTIVE) {
-	Uint64 dt = (p->tm_set > tm_set) ? p->tm_set-tm_set : tm_set-p->tm_set;
-	if (dt > ERTS_PROC_MAX_TIMER_SLOP) {
-	    p->tm_set = tm_set;
-#ifdef ERTS_SMP
-	    erts_reset_smp_ptimer(p->u.ptimer, timeout);
-#else
-	    erts_reset_timer(&p->u.tm, timeout);
-#endif
-	}
-	return;
-    }
-
-    p->flags |= F_TIMER_ACTIVE;
-    p->tm_set = tm_set;
 #ifdef ERTS_SMP
     erts_create_smp_ptimer(&p->u.ptimer,
 			   p->id,
