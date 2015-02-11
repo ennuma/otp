@@ -32,6 +32,7 @@
 -include("net_address.hrl").
 
 -define(DIST_DEF_BUFFER, 256*1024).
+-define(LOCAL_RTT_THRESHOLD_USEC, 1000).
 
 -define(to_port(Socket, Data, Opts),
 	case inet_tcp:send(Socket, Data, Opts) of
@@ -269,8 +270,10 @@ do_setup(Kernel, Node, Type, MyNode, LongOrShortNames,SetupTime) ->
     case inet:getaddr(Address, inet) of
 	{ok, Ip} ->
 	    Timer = dist_util:start_timer(SetupTime),
+	    T0 = os:timestamp(),
 	    case erl_epmd:port_please(Name, Ip) of
 		{port, TcpPort, Version} ->
+		    T1 = os:timestamp(),
 		    ?trace("port_please(~p) -> version ~p~n", 
 			   [Node,Version]),
 		    Bind = case application:get_env(kernel, inet_dist_use_interface) of
@@ -279,12 +282,35 @@ do_setup(Kernel, Node, Type, MyNode, LongOrShortNames,SetupTime) ->
 			       _ ->
 				   []
 			   end,
+		    LocalThreshold = case application:get_env(kernel, inet_dist_tunnel_rtt_threshold) of
+					 {ok, Threshold} ->
+					     Threshold;
+					 _ ->
+					     ?LOCAL_RTT_THRESHOLD_USEC
+				     end,
+		    {LIp, LPort, ConnectStr} = case timer:now_diff(T1, T0) of
+						   Usec when Usec > LocalThreshold ->
+						       case application:get_env(kernel, inet_dist_tunnel_port) of
+							   {ok, TunLPort} ->
+							       {{127, 0, 0, 1}, TunLPort, "CONNECT " ++ inet_parse:ntoa(Ip) ++ "\r\n"};
+							   _ ->
+							       {Ip, TcpPort, undefined}
+						       end;
+						   _ ->
+						       {Ip, TcpPort, undefined}
+					       end,
 		    dist_util:reset_timer(Timer),
-		    case inet_tcp:connect(Ip, TcpPort,
+		    case inet_tcp:connect(LIp, LPort,
 					  Bind ++ 
-					  [{active, false}, 
-					   {packet,2}]) of
+					  [{active, false}]) of
 			{ok, Socket} ->
+			    case ConnectStr of
+				undefined ->
+				    ok;
+				_ ->
+				    inet_tcp:send(Socket, list_to_binary(ConnectStr))
+			    end,
+			    inet:setopts(Socket, [{packet, 2}]),
 			    HSData = #hs_data{
 			      kernel_pid = Kernel,
 			      other_node = Node,
