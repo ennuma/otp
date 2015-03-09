@@ -131,7 +131,13 @@ connect({essl, SslConfig}, {Host, Port}, Opts0, Timeout) ->
 	   {port,       Port}, 
 	   {ssl_config, SslConfig}, 
 	   {timeout,    Timeout}]),
-    case (catch ssl:connect(Host, Port, Opts, Timeout)) of
+    Opts1 = case proplists:get_value(verify_hostname, Opts, undefined) of
+		undefined ->
+		    [{verify_hostname, Host} | Opts];
+		_ ->
+		    Opts
+	    end,
+    case (catch ssl:connect(Host, Port, Opts1, Timeout)) of
 	{'EXIT', Reason} ->
 	    {error, {eoptions, Reason}};
 	{ok, _} = OK ->
