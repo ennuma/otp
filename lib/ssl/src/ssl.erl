@@ -1199,8 +1199,11 @@ verify_cert_hostname(Cert, Hostname) ->
   end.
 
 cert_fail_response (Fail, UserState) ->
-    case application:get_env(ssl, proceed_after_cert_failure, false) of
+    case application:get_env(ssl, continue_after_cert_failure, false) of
 	true ->
+	    Report = io_lib:format("SSL WARNING: Peer certificate validation failed (~1000p): continuing only because continue_after_cert_failure is true",
+				   [UserState]),
+	    error_logger:info_report(Report),
 	    {valid, UserState};
 	false ->
 	    Fail
