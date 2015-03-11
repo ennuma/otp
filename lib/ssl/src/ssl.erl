@@ -1203,7 +1203,7 @@ cert_fail_response (Fail, UserState) ->
 	true ->
 	    Report = io_lib:format("SSL WARNING: Peer certificate validation failed (~1000p): continuing only because continue_after_cert_failure is true",
 				   [UserState]),
-	    error_logger:info_report(Report),
+	    error_logger:info_report(lists:flatten(Report)),
 	    {valid, UserState};
 	false ->
 	    Fail
