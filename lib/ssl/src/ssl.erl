@@ -146,7 +146,13 @@ connect(Socket, SslOptions0, Timeout) when is_port(Socket) ->
 connect(Host, Port, Options) ->
     connect(Host, Port, Options, infinity).
 
-connect(Host, Port, Options, Timeout) ->
+connect(Host, Port, Options0, Timeout) ->
+    Options = case proplists:get_value(verify_hostname, Options0, undefined) of
+		  undefined when is_list(Host) ->
+		      [{verify_hostname, Host} | Options0];
+		  _ ->
+		      Options0
+	      end,
     try handle_options(Options, client) of
 	{ok, Config} ->
 	    do_connect(Host,Port,Config,Timeout)
