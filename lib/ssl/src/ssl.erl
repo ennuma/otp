@@ -601,10 +601,18 @@ handle_options(Opts0, _Role) ->
 		 end
 	 end, proplists:get_value(verify_hostname, Opts, undefined)},
 
-    VerifyNoneFun = handle_option(verify_fun, Opts, DefaultVerifyFun),
+    DefaultVerifyNoneFun =
+        {fun(_,{bad_cert, _}, UserState) ->
+                 {valid, UserState};
+            (_,{extension, _}, UserState) ->
+                 {unknown, UserState};
+            (_, valid, UserState) ->
+                 {valid, UserState};
+            (_, valid_peer, UserState) ->
+                 {valid, UserState}
+         end, []},
 
     UserFailIfNoPeerCert = handle_option(fail_if_no_peer_cert, Opts, true),
-    UserVerifyFun = handle_option(verify_fun, Opts, DefaultVerifyFun),
     CaCerts = handle_option(cacerts, Opts, undefined),
 
     {Verify, FailIfNoPeerCert, CaCertDefault, VerifyFun} =
@@ -612,19 +620,24 @@ handle_options(Opts0, _Role) ->
 	case proplists:get_value(verify, Opts, verify_peer) of
 	    0 ->
 		{verify_none, false,
-		 ca_cert_default(verify_none, VerifyNoneFun, CaCerts), VerifyNoneFun};
+		 ca_cert_default(),
+		 handle_option(verify_fun, Opts, DefaultVerifyNoneFun)};
 	    1  ->
 		{verify_peer, false,
-		 ca_cert_default(verify_peer, UserVerifyFun, CaCerts), UserVerifyFun};
+		 ca_cert_default(),
+		 handle_option(verify_fun, Opts, DefaultVerifyFun)};
 	    2 ->
 		{verify_peer, true,
-		 ca_cert_default(verify_peer, UserVerifyFun, CaCerts), UserVerifyFun};
+		 ca_cert_default(),
+		 handle_option(verify_fun, Opts, DefaultVerifyFun)};
 	    verify_none ->
 		{verify_none, false,
-		 ca_cert_default(verify_none, VerifyNoneFun, CaCerts), VerifyNoneFun};
+		 ca_cert_default(),
+		 handle_option(verify_fun, Opts, DefaultVerifyNoneFun)};
 	    verify_peer ->
 		{verify_peer, UserFailIfNoPeerCert,
-		 ca_cert_default(verify_peer, UserVerifyFun, CaCerts), UserVerifyFun};
+		 ca_cert_default(),
+		 handle_option(verify_fun, Opts, DefaultVerifyFun)};
 	    Value ->
 		throw({error, {options, {verify, Value}}})
 	end,
@@ -880,7 +893,7 @@ validate_inet_option(_, _) ->
     ok.
 
 %% The option cacerts overrides cacertsfile
-ca_cert_default(_,_,_) ->
+ca_cert_default() ->
     application:get_env(ssl, cacertfile, code:root_dir() ++ "/etc/ca-root-otp.crt").
 
 emulated_options() ->

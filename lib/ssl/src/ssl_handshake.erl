@@ -231,6 +231,8 @@ certify(#certificate{asn1_certificates = ASN1Certs}, CertDbHandle, CertDbRef,
 								 SslState) of
 			     {valid, NewSslState} ->
 				 {valid, {NewSslState, UserState}};
+			     {fail, {bad_cert, invalid_ext_key_usage}} when OtpCert /= PeerCert ->
+				 {valid, {SslState, UserState}};
 			     {fail, Reason} ->
 				 apply_user_fun(Fun, OtpCert, Reason, UserState,
 						SslState);
